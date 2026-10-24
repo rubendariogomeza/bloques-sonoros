@@ -4,3 +4,6 @@ server/data/*.txt
 *.log
 .DS_Store
 Thumbs.db
+
+tools/
+tunnel*.log
