@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0c0a12" />
+    <meta name="description" content="Secuenciador musical tangible para el aula: bloques, cámara y sonido en tiempo real." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Bloques Sonoros" />
+    <title>Bloques Sonoros · Secuenciador tangible</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/icon.svg" />
+    <link rel="stylesheet" href="./styles/app.css" />
+  </head>
+  <body data-view="boot">
+    <main id="app" class="app">
+      <canvas id="stage" class="stage" aria-label="Vista de la mesa de juego con la línea de lectura"></canvas>
+
+      <div class="chrome">
+        <header id="hud" class="hud"></header>
+        <div id="banner" class="banner" hidden></div>
+      </div>
+
+      <div id="dock" class="dock" hidden></div>
+      <div id="screens" class="screens" data-visible="true"></div>
+      <div id="sheet-root" class="sheet-root" hidden></div>
+      <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+    </main>
+
+    <!-- Decodificador QR offline (Apache-2.0, vendorizado) -->
+    <script src="./vendor/jsqr.js"></script>
+    <script type="module" src="./src/main.js"></script>
+    <noscript>
+      <p class="noscript">Este secuenciador necesita JavaScript activado para funcionar.</p>
+    </noscript>
+  </body>
+</html>

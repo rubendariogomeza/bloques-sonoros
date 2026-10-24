@@ -1,0 +1,29 @@
+{
+  "name": "Bloques Sonoros · Secuenciador tangible",
+  "short_name": "Bloques",
+  "description": "Convierte bloques físicos en música: visión por computadora y Web Audio en el aula.",
+  "lang": "es",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0c0a12",
+  "theme_color": "#0c0a12",
+  "categories": ["education", "music", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

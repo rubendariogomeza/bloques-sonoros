@@ -1,0 +1,15 @@
+{
+  "name": "secuenciador-tangible",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Secuenciador musical tangible para el aula: bloques físicos, visión por computadora y Web Audio.",
+  "scripts": {
+    "start": "node server/index.mjs",
+    "test": "node --test",
+    "tokens": "node server/generate-tokens.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
