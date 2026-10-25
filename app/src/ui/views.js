@@ -179,6 +179,7 @@ export function createViews(root, handlers) {
 
   function showOnboarding({ mode = 'kit', message = '', kind = 'info' } = {}) {
     const isDemo = mode === 'demo';
+    const isTest = mode === 'test';
     const status = statusNode(message, kind);
     const primary = el('button', { class: 'btn btn--primary btn--wide', type: 'button' }, [
       isDemo ? 'Entrar con bloques virtuales' : 'Iniciar sesión musical',
@@ -191,7 +192,7 @@ export function createViews(root, handlers) {
         el('span', { class: 'permission__icon', 'aria-hidden': 'true' }, ['◉']),
         el('span', null, [
           el('div', { class: 'permission__title', text: 'Cámara' }),
-          el('div', { class: 'permission__text', text: 'Para ver los bloques sobre la mesa. El video se procesa aquí y nunca se sube a internet.' }),
+          el('div', { class: 'permission__text', text: 'Para ver los bloques sobre la pared. El video se procesa aquí y nunca se sube a internet.' }),
         ]),
       ]),
       el('li', { class: 'permission' }, [
@@ -204,26 +205,32 @@ export function createViews(root, handlers) {
       el('li', { class: 'permission' }, [
         el('span', { class: 'permission__icon', 'aria-hidden': 'true' }, ['▦']),
         el('span', null, [
-          el('div', { class: 'permission__title', text: 'Mesa despejada' }),
-          el('div', { class: 'permission__text', text: 'Al entrar, retira los bloques y toca Calibrar una sola vez.' }),
+          el('div', { class: 'permission__title', text: 'Pared despejada' }),
+          el('div', { class: 'permission__text', text: 'Al entrar, deja la pared vacía y toca Calibrar una sola vez.' }),
         ]),
       ]),
     ]);
 
+    const badge = isDemo
+      ? el('span', { class: 'badge badge--demo', text: 'Prueba · 20 min' })
+      : isTest
+        ? el('span', { class: 'badge badge--demo', text: 'Modo prueba' })
+        : el('span', { class: 'badge', text: 'Kit activado' });
+
     const card = el('div', { class: 'card' }, [
       logo(),
-      el('div', { class: 'dock__group', style: { marginBottom: '10px', gap: '8px', flexWrap: 'wrap' } }, [
-        isDemo ? el('span', { class: 'badge badge--demo', text: 'Prueba · 20 min' }) : el('span', { class: 'badge', text: 'Kit activado' }),
-      ]),
+      el('div', { class: 'dock__group', style: { marginBottom: '10px', gap: '8px', flexWrap: 'wrap' } }, [badge]),
       el('h1', { text: isDemo ? 'Todo listo para probar' : 'Vamos a sonar' }),
       el('p', { class: 'muted', text: isDemo
         ? 'Esta prueba usa bloques virtuales: toca la pantalla para colocarlos.'
-        : 'Un toque para pedir los permisos y arrancar el motor musical.' }),
+        : isTest
+          ? 'Un toque para pedir los permisos y probar con los cubos reales.'
+          : 'Un toque para pedir los permisos y arrancar el motor musical.' }),
       permissions,
       primary,
-      el('div', { class: 'auth-actions' }, isDemo ? [back] : [simBtn, back]),
+      el('div', { class: 'auth-actions' }, isDemo ? [back] : isTest ? [simBtn] : [simBtn, back]),
       status,
-      el('p', { class: 'fineprint', text: 'Consejo: usa la cámara trasera y apoya el teléfono en la base del kit.' }),
+      el('p', { class: 'fineprint', text: 'Consejo: coloca el móvil en el soporte del kit, en horizontal y mirando a la pared.' }),
     ]);
 
     mount(el('section', { class: 'screen' }, [card]));

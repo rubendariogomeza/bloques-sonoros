@@ -12,7 +12,7 @@ import { isWellFormed, normalizeToken } from './token.js';
 
 export const DEMO_MINUTES = 20;
 
-export function createLicenseManager({ storage, api }) {
+export function createLicenseManager({ storage, api, testMode = false }) {
   let deviceId = storage.get(STORAGE_KEYS.device, null);
   if (!deviceId) {
     deviceId = `dev_${createId('d').slice(2)}`;
@@ -52,17 +52,19 @@ export function createLicenseManager({ storage, api }) {
     if (real) return { ...real, mode: 'kit' };
     const demo = readDemo();
     if (demo) return { ...demo, mode: 'demo' };
+    // Modo de pruebas: acceso directo con cámara, sin canje ni vencimiento.
+    if (testMode) return { mode: 'test', startedAt: Date.now() };
     return null;
   }
 
   function isUnlocked() {
-    return Boolean(current());
+    return testMode || Boolean(current());
   }
 
   function features() {
     const active = current();
     return {
-      camera: active?.mode === 'kit',
+      camera: active?.mode === 'kit' || active?.mode === 'test',
       simulator: true,
       duration: active?.mode === 'demo' ? Math.max(0, active.expiresAt - Date.now()) : Infinity,
     };
@@ -132,6 +134,9 @@ export function createLicenseManager({ storage, api }) {
     },
     get mode() {
       return current()?.mode ?? null;
+    },
+    get testMode() {
+      return testMode;
     },
   };
 }

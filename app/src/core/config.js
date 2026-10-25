@@ -8,6 +8,15 @@ export const APP = Object.freeze({
   version: '0.1.0',
 });
 
+/**
+ * Modo de pruebas con el kit físico.
+ *
+ * `true` desactiva la pantalla de licencia por QR y habilita la cámara sin
+ * canjear ningún código. Sirve para enviar un enlace de prueba a quien tiene
+ * los cubos. Vuelve a `false` para producción: el bloqueo por QR sigue intacto.
+ */
+export const TEST_MODE = true;
+
 export const STORAGE_KEYS = Object.freeze({
   license: 'mt.license.v1',
   settings: 'mt.settings.v1',

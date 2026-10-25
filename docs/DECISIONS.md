@@ -224,6 +224,25 @@ claro sigue detectándose porque su cromaticidad no coincide.
 
 ---
 
+## ADR-18 · Modo prueba sin QR
+
+**Contexto:** antes de imprimir manuales hay que validar el kit real con cubos, cámara y pared.
+El flujo de licencia exige un QR canjeable y el inventario de prueba ya estaba agotado, lo que
+bloquea la prueba de campo.
+
+**Decisión:** un interruptor `TEST_MODE` en `app/src/core/config.js`. Cuando es `true`, el
+`createLicenseManager` devuelve una licencia de modo `test`: sin pantalla de bloqueo, cámara
+habilitada y sin vencimiento. La insignia «Modo prueba» y el botón «Volver al inicio de la prueba»
+dejan claro que no es una unidad vendida. En `false`, el flujo de QR, demo y verificación por
+dispositivo queda idéntico.
+
+**Consecuencia:** se puede enviar un enlace y probar con los cubos en minutos. El interruptor es
+de compilación (una constante), no una puerta trasera en producción: al desplegar hay que ponerlo
+en `false`, y la prueba `test/auth-license.test.js` cubre ambos estados. El enlace de prueba usa
+un túnel HTTPS temporal, así que depende de que el servidor siga encendido.
+
+---
+
 ## Descartado
 
 | Idea | Motivo |

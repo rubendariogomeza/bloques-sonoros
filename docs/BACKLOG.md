@@ -7,7 +7,7 @@
 
 | Historia | Estado | Evidencia |
 | --- | --- | --- |
-| HU-01 Autenticación por QR físico | 🟡 | `auth/qr.js`, `auth/license.js`, `server/licenseStore.mjs`; 10 pruebas de servidor/token. Canje manual verificado en navegador. QR impreso pendiente. |
+| HU-01 Autenticación por QR físico | 🟡 | `auth/qr.js`, `auth/license.js`, `server/licenseStore.mjs`; 10 pruebas de servidor/token. Canje manual verificado en navegador. QR impreso pendiente. **Modo prueba** (`TEST_MODE` en `core/config.js`) permite probar con los cubos sin canjear código. |
 | HU-02 Onboarding y permisos | 🟡 | `ui/views.js`, `main.js`; verificado con simulador. Permiso real de cámara pendiente. |
 | HU-03 Calibración por sustracción de fondo | ✅ | `vision/background.js` + pruebas de máscara/fondo; `calibrateOnce` verificado en simulador. |
 | HU-04 Recalibración en caliente | ✅ | `vision/align.js`; 3 pruebas (traslación ±1 px, sin movimiento, desplazamiento del fondo). |

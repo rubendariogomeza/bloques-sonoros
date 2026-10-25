@@ -10,6 +10,7 @@ rompe: cualquier construcción suena bien. Todo el video y el audio se procesan 
 - **Alumnos:** construyen y apilan bloques. El único feedback es el sonido.
 - **Acceso:** código QR de un solo uso impreso en el manual del kit físico; se canjea una vez
   contra el servidor y queda activo en el dispositivo para siempre (incluso sin internet).
+  Para pruebas con los cubos reales existe el **modo prueba**, que omite el QR (ver abajo).
 - **Montaje:** soporte impreso en 3D con el móvil en horizontal, cámara frontal a la pared.
 
 ## Arranque rápido
@@ -36,12 +37,34 @@ El simulador dibuja una pared con bloques y atraviesa exactamente el mismo pipel
 la cámara (fondo, máscara, morfología, silueta, blobs, capas, columnas). Al mover los bloques, la
 melodía cambia de registro, densidad o instrumento en el compás siguiente.
 
+## Modo prueba (sin QR)
+
+Para probar con el kit físico sin gastar un código, `app/src/core/config.js` exporta
+`TEST_MODE = true`. Con ese valor:
+
+- No aparece la pantalla de licencia: la app abre directo en el onboarding.
+- La cámara queda habilitada sin canje ni vencimiento y se muestra la insignia **Modo prueba**.
+- «Volver al inicio de la prueba» reinicia la sesión sin borrar nada del dispositivo.
+
+Es un interruptor de desarrollo: ponlo en `false` para producción y el bloqueo por QR vuelve a
+funcionar exactamente igual que antes (la lógica de licencia no se modificó).
+
+Para enviar el enlace a otra persona, el servidor tiene que ser accesible por HTTPS (la cámara lo
+exige). En local se puede abrir un túnel temporal:
+
+```sh
+tools/cloudflared.exe tunnel --url http://localhost:4173 --no-autoupdate --protocol http2
+```
+
+El enlace `trycloudflare.com` vive solo mientras sigan corriendo el servidor y el túnel; al
+cerrarlos deja de responder.
+
 ## Comandos
 
 | Comando | Para qué |
 | --- | --- |
 | `npm start` | App + API de licencias en `http://localhost:4173`. |
-| `npm test` | Suite completa (`node --test`, 88 pruebas). |
+| `npm test` | Suite completa (`node --test`, 91 pruebas). |
 | `npm run tokens -- --count 25 --label lote-septiembre` | Genera códigos de un solo uso. |
 | `npm run tokens -- --count 5 --out server/data/lote.txt` | Los guarda en un archivo para imprimir. |
 

@@ -2,7 +2,7 @@
  * Punto de entrada de la PWA. Conecta licencia, cámara, visión, transporte,
  * audio y UI. Un único bucle de animación gobierna visión y overlay.
  */
-import { DEFAULTS, LIMITS, COLUMN_CHOICES, COLOR_CLASSES, COLOR_LABELS, STORAGE_KEYS, SWEEP_BEATS } from './core/config.js';
+import { DEFAULTS, LIMITS, COLUMN_CHOICES, COLOR_CLASSES, COLOR_LABELS, STORAGE_KEYS, SWEEP_BEATS, TEST_MODE } from './core/config.js';
 import { clamp } from './core/util.js';
 import { storage } from './platform/storage.js';
 import { createApiClient, redeemMessage } from './auth/api.js';
@@ -34,7 +34,7 @@ const toastsRoot = document.getElementById('toasts');
 const overlay = createOverlay(stage);
 const hud = createHud({ hudRoot, bannerRoot, toastRoot: toastsRoot });
 const api = createApiClient();
-const license = createLicenseManager({ storage, api });
+const license = createLicenseManager({ storage, api, testMode: TEST_MODE });
 const audio = createAudioEngine();
 const settings = loadSettings();
 const transport = createTransport({ bpm: settings.bpm, columns: settings.columns, sweepBeats: SWEEP_BEATS });
@@ -194,7 +194,7 @@ async function startSession(mode = 'camera') {
     source.seedDemo();
     await play();
   } else {
-    hud.banner('Retira los bloques y toca <b>Calibrar</b> para que la app aprenda el fondo de la mesa.', {
+    hud.banner('Retira los bloques y toca <b>Calibrar</b> para que la app aprenda el fondo de la pared.', {
       kind: 'warn',
       action: { label: 'Calibrar ahora', onClick: () => calibrateNow() },
     });
@@ -308,7 +308,7 @@ function handleStep({ column, time, pass }) {
 async function calibrateNow({ quiet = false, autoPlay = true } = {}) {
   if (!session) return false;
   dock?.setCalibrating(true);
-  if (!quiet) hud.banner('Mantén la mesa <b>vacía</b> un momento…', { kind: 'info' });
+  if (!quiet) hud.banner('Mantén la pared <b>vacía</b> un momento…', { kind: 'info' });
   try {
     await session.engine.calibrate({ frames: 10, timeoutMs: 6000 });
     live.calibrated = true;
@@ -328,7 +328,7 @@ async function calibrateNow({ quiet = false, autoPlay = true } = {}) {
 function fastRecalibrate() {
   if (!session) return;
   if (!session.engine.recalibrateFast()) {
-    hud.notify('Primero calibra el fondo con la mesa vacía.', { kind: 'error' });
+    hud.notify('Primero calibra el fondo con la pared vacía.', { kind: 'error' });
     return;
   }
   hud.notify('Recalibrando sin cortar la música…', { kind: 'info', timeout: 2200 });
@@ -542,6 +542,12 @@ async function changeMode(mode) {
 }
 
 async function signOut() {
+  if (license.testMode) {
+    // Sin licencia real no hay nada que revocar: se vuelve al inicio de la prueba.
+    await teardownSession();
+    views.showOnboarding({ mode: 'test' });
+    return;
+  }
   if (license.mode === 'demo') {
     license.endDemo();
   } else {
@@ -705,6 +711,7 @@ const handlers = {
       showStats: settings.showStats,
       mode: live.mode,
       cameraAllowed: license.features().camera,
+      testMode: license.testMode,
     });
   },
   onToggleMute: () => toggleMute(),

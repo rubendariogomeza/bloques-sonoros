@@ -300,7 +300,7 @@ export function createSheets({ root, handlers }) {
         el('div', { class: 'setting' }, [
           el('div', { class: 'setting__head' }, [el('div', { class: 'setting__label', text: 'Calibración' })]),
           el('div', { class: 'dock__group' }, [
-            el('button', { class: 'btn btn--sm', type: 'button', onclick: () => handlers.onCalibrate() }, ['Calibrar con la mesa vacía']),
+            el('button', { class: 'btn btn--sm', type: 'button', onclick: () => handlers.onCalibrate() }, ['Calibrar con la pared vacía']),
             el('button', { class: 'btn btn--sm btn--ghost', type: 'button', onclick: () => handlers.onRecalibrate() }, ['Recalibrar rápido']),
           ]),
           el('div', { class: 'setting__hint', text: 'La recalibración rápida compensa movimientos de la cámara sin detener la música.' }),
@@ -314,7 +314,11 @@ export function createSheets({ root, handlers }) {
           },
         }, ['Cómo se juega']),
         el('button', { class: 'btn btn--danger btn--wide', type: 'button', onclick: () => handlers.onSignOut() }, [
-          state.mode === 'demo' ? 'Salir de la prueba' : 'Desactivar este kit en este dispositivo',
+          state.testMode
+            ? 'Volver al inicio de la prueba'
+            : state.mode === 'demo'
+              ? 'Salir de la prueba'
+              : 'Desactivar este kit en este dispositivo',
         ]),
         el('p', { class: 'fineprint', text: `${APP.name} v${APP.version} · El video nunca sale de este dispositivo.` }),
       ]),
@@ -335,7 +339,7 @@ export function createSheets({ root, handlers }) {
       head('Cómo se juega'),
       el('div', { class: 'sheet__body' }, [
         el('ol', { class: 'muted', style: { lineHeight: '1.7', paddingLeft: '18px' } }, [
-          el('li', { text: 'Apoya el celular en la base del kit mirando la mesa, sin moverlo durante la clase.' }),
+          el('li', { text: 'Apoya el celular en el soporte del kit mirando la pared, sin moverlo durante la clase.' }),
           el('li', { text: 'Retira los bloques y toca Calibrar: la app aprende el fondo vacío.' }),
           el('li', { text: 'Coloca bloques en las columnas. Cada color tiene su sonido; apilar varios suena a la vez.' }),
           el('li', { text: 'Si la cámara se mueve, toca ⟳ para recalibrar sin cortar la música.' }),
