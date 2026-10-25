@@ -68,10 +68,15 @@ export function createMaskProcessor(width, height) {
         0.5;
 
       const d = 0.62 * dLuma + 0.58 * dChroma;
-      residual[p] = d;
+      // Sombra: mismo color, solo más oscuro. No es un bloque y no debe cambiar
+      // la silueta (ni, por tanto, la variación musical).
+      const ratio = luma / (lumaBg + 1e-3);
+      const shadow = ratio > 0.3 && ratio < 0.92 && dChroma < 0.028;
+      residual[p] = shadow ? 0 : d;
 
       let value = soft[p];
-      if (d > enter) value = Math.min(255, value + 120);
+      if (shadow) value = Math.max(0, value - 90);
+      else if (d > enter) value = Math.min(255, value + 120);
       else if (d < exit) value = Math.max(0, value - 90);
       else value = Math.max(0, value - 12);
       soft[p] = value;

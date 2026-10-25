@@ -8,7 +8,7 @@
  */
 import { clamp } from '../core/util.js';
 import { getKit, kitSampleIds, kitScale, sanitizeMapping } from './kits.js';
-import { renderSample } from './synth.js';
+import { renderSample, SAMPLE_BASE_MIDI } from './synth.js';
 import { semitonesToRate, yToSemitones } from '../sequencer/pattern.js';
 
 export const MAX_VOICES = 48;
@@ -140,6 +140,16 @@ export function createAudioEngine({ renderer = renderSample } = {}) {
     return playSample('click', { when, gain: 0.25 });
   }
 
+  /**
+   * Toca un sample melódico a una altura concreta.
+   * La afinación se resuelve con `playbackRate`, sin renderizar un buffer por nota.
+   */
+  function playNote(sampleId, { when, midi = 69, gain = 0.6, pan = 0 } = {}) {
+    const base = SAMPLE_BASE_MIDI[sampleId];
+    if (base == null) return playSample(sampleId, { when, gain, pan });
+    return playSample(sampleId, { when, gain, rate: 2 ** ((midi - base) / 12), pan });
+  }
+
   function setVolume(next) {
     volume = clamp(next, 0, 1);
     if (master) master.gain.setTargetAtTime(muted ? 0 : volume, context.currentTime, 0.02);
@@ -174,6 +184,7 @@ export function createAudioEngine({ renderer = renderSample } = {}) {
     init,
     loadKit,
     playColor,
+    playNote,
     playSample,
     click,
     setMapping,

@@ -1,6 +1,6 @@
 # Backlog y estado
 
-> Estado verificado el 24/10/2026. `npm test` → **55 pruebas, 0 fallos**.
+> Estado verificado el 24/10/2026. `npm test` → **88 pruebas, 0 fallos**.
 > Leyenda: ✅ implementado y verificado · 🟡 implementado, pendiente de validación en hardware · ⛔ no empezado.
 
 ## Resumen
@@ -14,10 +14,12 @@
 | HU-05 Tolerancia a la luz | ✅ | `background.js` (factor global + reflectancia); prueba con +28 % de luz. |
 | HU-06 Barrido continuo | ✅ | `sequencer/transport.js`; pruebas de posición lineal, reinicio y 10 min sin drift. |
 | HU-07 Cambio de BPM sin cortes | ✅ | `transport.setBpm` + `scheduler.setBpm`; 2 pruebas + verificación visual del HUD (96 → 140). |
-| HU-08 Disparo por atributos físicos | ✅ | `vision/color.js`, `layers.js`, `columns.js`, `audio/kits.js`; pruebas de color, capas y mapeo. |
-| HU-09 Polifonía por apilamiento | ✅ | `columns.active()` + `handleStep`; prueba de torre de 3 colores y tope de 48 voces. |
+| HU-08 Disparo por atributos físicos | ✅ | `vision/color.js`, `layers.js`, `columns.js`, `audio/kits.js`; pruebas de color, capas y mapeo. Modo alternativo desde HU-12 (ajuste «Melodía guiada» desactivado). |
+| HU-09 Polifonía por apilamiento | ✅ | `columns.active()` + `handleStep`; prueba de torre de 3 colores y tope de 48 voces. Modo alternativo desde HU-12. |
 | HU-10 Mapeo de sonidos | ✅ | `ui/sheets.js` + `audio/engine.setMapping`; hoja verificada y persistencia en `mt.settings.v1`. |
 | HU-11 Monitoreo visual | ✅ | `ui/overlay.js`; verificado en simulador (barrido, cajas, destellos). Cámara real pendiente. |
+| HU-12 Melodía reactiva a la silueta | ✅ | `vision/structure.js`, `music/variation.js`, `music/song.js`, `audio/melody.js`; 12 pruebas (silueta, variación, armonía exhaustiva, reproductor). Verificado en navegador: 34–44 notas/8 s, 0 notas fuera de escala. |
+| HU-13 Montaje en pared con soporte 3D | 🟡 | Encuadre apaisado y rechazo de sombras (`vision/mask.js` + `test/vision-mask.test.js`). Falta validar con la pared y la luz del aula. |
 
 ## Detalle
 
@@ -91,22 +93,49 @@
 - Overlay sobre el video: rejilla de columnas, línea de barrido con estela, cajas de detección
   por color, destellos al disparar y viñeta.
 - HUD: estado (`En vivo`, `En pausa`, `Sin calibrar`, `Calibrando`), BPM, número de bloques,
-  fuente (`Virtual`) y FPS si se activa “Mostrar rendimiento”.
+  variación vigente (`marimba · agudo · corcheas · bajo`), fuente (`Virtual`) y FPS si se activa
+  “Mostrar rendimiento”.
+
+### HU-12 · Melodía reactiva a la silueta
+
+- `structure.js` mide la silueta completa (ocupación por columna, altura, base, color dominante,
+  simetría) sobre la máscara morfológica. No separa piezas: con el kit real los bloques se tocan.
+- `variation.js` cuantiza la silueta en 5 dimensiones y exige 900 ms estable antes de confirmar.
+- `song.js` renderiza un compás de melodía pentatónica (I–V–vi–IV) con lead, armonía y bajo.
+- `melody.js` agenda las notas en el lookahead del scheduler y afina por `playbackRate`.
+- La variación se aplica **solo en la columna 0**; el pulso y el BPM no se tocan (HU-06/07).
+- Prueba exhaustiva: 162 variaciones × 8 compases sin una sola nota fuera de escala o acorde.
+- Verificado en navegador: la estructura demo cambia el chip del HUD y la música sigue sonando
+  al pasar de 100 a 140 BPM y al pausar/reanudar.
+
+### HU-13 · Montaje en pared con soporte 3D
+
+- El móvil va en horizontal con la cámara frontal a la pared; el pipeline recorta a 320×240 con
+  encuadre «cover», así que no depende de la orientación del stream.
+- `mask.js` rechaza sombras: mismo matiz que el fondo y luma entre 0,3 y 0,92 del original.
+- La calibración se hace con la pared vacía; `recalibrateFast` mueve el fondo sin parar la música.
+- **Pendiente:** validar distancia, ángulo del soporte y sombras reales del aula.
 
 ## Deuda priorizada
 
-1. **Validar cámara real** (HU-01/02/03/04/11): ángulo, reflejos, luz solar, mesa de madera.
-2. **Medir latencia extremo a extremo** en móviles de gama media y ajustar el valor por defecto de
+1. **Validar cámara real** (HU-01/02/03/04/11/13): ángulo del soporte, reflejos, luz solar,
+   sombras de manos y pared.
+2. **Estructuras muy grandes:** `maxArea = 45 %` en `engine.js` puede descartar una construcción
+   que llene el encuadre. La silueta musical ya no depende de los blobs, pero el HUD y los
+   destellos sí; conviene subir el límite o medir la silueta aparte.
+3. **Registro grave apagado:** la marimba a `rate 0.5` suena opaca. Evaluar subir la melodía una
+   octava o limitar `register` a medio/agudo.
+4. **Medir latencia extremo a extremo** en móviles de gama media y ajustar el valor por defecto de
    compensación (hoy 0 ms).
-3. **QR impreso**: probar `BarcodeDetector` y `jsQR` con el código del manual a distintas
+5. **QR impreso**: probar `BarcodeDetector` y `jsQR` con el código del manual a distintas
    distancias y con poca luz.
-4. **PWA instalada**: revisar el modo `standalone`, orientación y safe areas en iOS.
-5. **Accesibilidad**: recorrido completo con teclado y lector de pantalla en las hojas.
-6. **Samples personalizados** (fuera del MVP): permitir subir archivos y guardarlos en IndexedDB.
+6. **PWA instalada**: revisar el modo `standalone`, orientación y safe areas en iOS.
+7. **Accesibilidad**: recorrido completo con teclado y lector de pantalla en las hojas.
+8. **Samples personalizados** (fuera del MVP): permitir subir archivos y guardarlos en IndexedDB.
 
 ## Definición de terminado (AGENTS.md)
 
-- [x] `npm test` en verde (55/55), sin skips.
+- [x] `npm test` en verde (88/88), sin skips.
 - [x] Historia verificable con `npm start` en menos de 5 minutos (simulador + licencia).
 - [x] `docs/BACKLOG.md` con el estado real.
 - [x] Sin `console.log` de depuración ni código muerto (se retiraron `bus.js`, `store.js`, `idb.js`

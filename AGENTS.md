@@ -37,9 +37,10 @@ npm run tokens    # genera códigos QR de un solo uso para el kit
 app/src/core/       config, utilidades puras
 app/src/platform/   localStorage
 app/src/auth/       token, cliente API, licencia, escáner QR
-app/src/vision/     cámara → máscara → blobs → capas → columnas
+app/src/vision/     cámara → máscara → silueta → blobs → capas → columnas
 app/src/sequencer/  transporte (matemática pura) + scheduler (lookahead)
-app/src/audio/      sintetizador de samples, kits, motor de voces
+app/src/music/      canción pentatónica + silueta → variación armónica
+app/src/audio/      sintetizador de samples, kits, motor de voces y melodía
 app/src/ui/         vistas y render del overlay (solo presentación)
 app/styles/         sistema de diseño CSS
 test/               pruebas unitarias de lógica pura
@@ -47,7 +48,8 @@ server/             estático + API de canje de licencias
 ```
 
 Reglas de dependencia: `ui → core`, `main → (todas)`, `sequencer → core`,
-`audio → core`, `vision → core`. Nunca `core → ui` ni `vision → ui`.
+`music → core`, `audio → core`, `vision → core`. Nunca `core → ui` ni `vision → ui`.
+`music/` no importa de `audio/` ni de `vision/`: recibe datos planos y devuelve notas.
 
 ## Convenciones de código
 
@@ -65,7 +67,10 @@ Reglas de dependencia: `ui → core`, `main → (todas)`, `sequencer → core`,
 2. El reloj es `AudioContext.currentTime`; `setTimeout` solo agenda con lookahead.
 3. Ningún frame de video sale del dispositivo.
 4. Sin licencia válida no se inicializa el motor de audio.
-5. La polifonía es por columna: todos los bloques apilados suenan en el mismo instante.
+5. La melodía nunca desafina: toda nota pertenece a la pentatónica de Do o al acorde del compás.
+6. La variación musical se aplica al empezar el compás, nunca a mitad de nota, y solo tras 0,9 s
+   de silueta estable.
+7. La polifonía es por columna (modo bloque → sonido): todos los bloques apilados suenan juntos.
 
 ## Definición de terminado
 

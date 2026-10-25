@@ -177,12 +177,61 @@ gestionar a mano el ciclo de vida de las vistas y los listeners.
 
 ---
 
+## ADR-15 · La música se decide por silueta, no por piezas
+
+**Contexto:** el metraje del kit real (14 fotogramas analizados con el clasificador y el
+etiquetador de la app) mostró que los ladrillos apilados del mismo color se fusionan en un único
+blob, que la mesa de madera se clasifica como `orange` y que una estructura grande supera el
+`maxArea` del 50 %. Separar piezas exigiría costuras, watershed y priors de forma, y fallaría con
+sombras y cambios de luz.
+
+**Decisión:** medir la **silueta completa** sobre la máscara (`vision/structure.js`): ocupación por
+columna, altura superior, base, color dominante y simetría. Los blobs se siguen calculando para el
+HUD y los destellos, pero ya no son la fuente de la música.
+
+**Consecuencia:** el comportamiento es estable aunque los bloques se toquen o el blob se descarte
+por tamaño. Se pierde el detalle «una nota por ladrillo», que era justamente lo que sonaba caótico.
+
+---
+
+## ADR-16 · La estructura varía la armonía; no dispara notas una a una
+
+**Contexto:** el mapeo bloque → sonido uno a uno produce caos con muchas piezas y obliga al niño a
+acertar notas. El objetivo pedagógico es que cualquier construcción suene bien.
+
+**Decisión:** una melodía infantil continua en Do (pentatónica + progresión I–V–vi–IV) que la
+silueta varía en cinco dimensiones cuantizadas: registro, densidad, timbre, bajo y adorno. La
+variación se confirma tras 900 ms estable y se aplica **al empezar el compás**, nunca a mitad de
+nota.
+
+**Consecuencia:** la armonía es correcta por construcción (prueba exhaustiva de 162 variaciones ×
+8 compases). El cambio es perceptible pero no rompe el pulso. El modo bloque → sonido queda como
+ajuste opcional («Melodía guiada» desactivado).
+
+---
+
+## ADR-17 · Rechazo de sombras en la máscara
+
+**Contexto:** con el móvil frente a la pared, la sombra del propio teléfono y de las manos es
+grande y persistente; sin filtro cambiaba la silueta y, con ella, la canción sola.
+
+**Decisión:** si un píxel conserva la cromaticidad del fondo y solo es más oscuro (ratio de luma
+entre 0,3 y 0,92), no entra en la máscara y se resta de la histéresis.
+
+**Consecuencia:** las sombras dejan de alterar la variación musical y las pruebas cubren sombra
+suave, sombra fuerte, bloque oscuro y bloque en penumbra. Un objeto realmente negro sobre fondo
+claro sigue detectándose porque su cromaticidad no coincide.
+
+---
+
 ## Descartado
 
 | Idea | Motivo |
 | --- | --- |
 | OpenCV.js / MediaPipe | Peso, arranque y falta de sustracción de fondo configurable. |
 | Detección por marcadores ArUco | Requiere imprimir marcadores; el kit usa bloques de color. |
+| Separar piezas del mismo color que se tocan | Costuras y watershed son frágiles con sombras, perspectiva y luz variable; la silueta da mejor música con menos CPU (ADR-15). |
+| Mapeo uno a uno bloque → nota | Con muchas piezas suena caótico y exige acertar; la variación armónica cumple mejor el objetivo (ADR-16). |
 | Backend con base de datos | El MVP solo necesita un JSON con hashes; menos infraestructura. |
 | Web Worker para visión | El pipeline a 320×240 cabe en el hilo principal a 20 fps; añadir worker complica el overlay. |
 | Audio por `<audio>` | Latencia y falta de control de polifonía; Web Audio es obligatorio. |

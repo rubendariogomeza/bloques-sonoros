@@ -1,14 +1,16 @@
 # Bloques Sonoros · Secuenciador musical tangible
 
-PWA educativa en la que los bloques físicos colocados sobre una mesa se convierten en música.
-La cámara detecta los bloques, una línea de lectura barre la mesa de izquierda a derecha y cada
-columna hace sonar sus colores al mismo tiempo (polifonía vertical). Todo el video y el audio se
-procesan en el navegador: **ningún frame sale del dispositivo**.
+PWA educativa en la que los bloques físicos colocados sobre una pared se convierten en música.
+La cámara mide la **forma** de la construcción, una línea de lectura barre el área de izquierda a
+derecha y la silueta elige una variación de una melodía infantil continua. La armonía nunca se
+rompe: cualquier construcción suena bien. Todo el video y el audio se procesan en el navegador:
+**ningún frame sale del dispositivo**.
 
 - **Profesor:** calibra el fondo, elige kit de sonidos, ajusta BPM, sensibilidad y volumen.
-- **Alumnos:** mueven y apilan bloques. El único feedback es el sonido.
+- **Alumnos:** construyen y apilan bloques. El único feedback es el sonido.
 - **Acceso:** código QR de un solo uso impreso en el manual del kit físico; se canjea una vez
   contra el servidor y queda activo en el dispositivo para siempre (incluso sin internet).
+- **Montaje:** soporte impreso en 3D con el móvil en horizontal, cámara frontal a la pared.
 
 ## Arranque rápido
 
@@ -30,15 +32,16 @@ Escríbelo o escanéalo en la pantalla de bloqueo. Si prefieres no gastar un có
 1. Pulsa **Probar con bloques virtuales** (demo de 20 minutos, solo simulador).
 2. O pulsa **Empezar con bloques virtuales** en el onboarding tras activar un kit.
 
-El simulador dibuja una mesa de madera con bloques y atraviesa exactamente el mismo pipeline de
-visión que la cámara (fondo, máscara, morfología, blobs, capas, columnas).
+El simulador dibuja una pared con bloques y atraviesa exactamente el mismo pipeline de visión que
+la cámara (fondo, máscara, morfología, silueta, blobs, capas, columnas). Al mover los bloques, la
+melodía cambia de registro, densidad o instrumento en el compás siguiente.
 
 ## Comandos
 
 | Comando | Para qué |
 | --- | --- |
 | `npm start` | App + API de licencias en `http://localhost:4173`. |
-| `npm test` | Suite completa (`node --test`, 55 pruebas). |
+| `npm test` | Suite completa (`node --test`, 88 pruebas). |
 | `npm run tokens -- --count 25 --label lote-septiembre` | Genera códigos de un solo uso. |
 | `npm run tokens -- --count 5 --out server/data/lote.txt` | Los guarda en un archivo para imprimir. |
 
@@ -55,11 +58,12 @@ Variables de entorno del servidor:
 1. **Activa el kit** con el QR del manual (o escribe el código).
 2. **Inicia sesión musical**: un toque que pide cámara y audio. Sin ese gesto el navegador no
    deja arrancar el motor de audio.
-3. **Calibra** con la mesa vacía. La app aprende el fondo.
-4. Coloca bloques. La línea de barrido los cruza y suena la columna completa.
+3. **Calibra** con la pared vacía. La app aprende el fondo.
+4. Construye con bloques. La línea de barrido recorre el área y suena la melodía; la forma de la
+   estructura cambia la variación en el compás siguiente (el chip del HUD dice cuál).
 5. Si la cámara se mueve, **⟳ Recalibrar rápido** compensa el desplazamiento sin parar la música.
 6. **Sonidos** reasigna color → sample; **Ajustes** cambia rejilla (8/12/16/24), sensibilidad,
-   latencia, volumen, metrónomo y fuente de video.
+   latencia, volumen, metrónomo, melodía guiada, acentos y fuente de video.
 
 ## Estructura
 
@@ -72,9 +76,10 @@ app/                 PWA estática (ES modules nativos, sin build)
   src/core/          config y utilidades puras
   src/platform/      localStorage
   src/auth/          token, API, licencia, escáner QR
-  src/vision/        cámara → máscara → blobs → capas → columnas
+  src/vision/        cámara → máscara → silueta → blobs → capas → columnas
   src/sequencer/     transporte (matemática pura) + scheduler (lookahead)
-  src/audio/         samples sintetizados, kits y motor de voces
+  src/music/         canción pentatónica + silueta → variación armónica
+  src/audio/         samples sintetizados, kits, motor de voces y melodía
   src/ui/            overlay, HUD, dock, hojas y pantallas
 server/              estático + API de licencias (solo stdlib)
 test/                pruebas de lógica pura (node --test)
@@ -85,16 +90,20 @@ docs/                manifiesto, arquitectura, backlog, decisiones, QA y UX
 
 1. **Visión (20 fps):** el frame se reduce a 320 px de ancho, se compara con un modelo de fondo
    por píxel (luma + cromaticidad normalizada), se umbraliza con histéresis y se limpia con
-   morfología 3×3. Los blobs se etiquetan por conectividad 8 y se descomponen en capas de color.
+   morfología 3×3. Sobre la máscara se mide la **silueta** (ocupación, altura, base, color,
+   simetría); los blobs se reservan para el HUD y los destellos.
 2. **Iluminación:** un factor global estimado por histograma corrige la exposición; el fondo
-   guarda reflectancia, no brillo.
+   guarda reflectancia, no brillo. Las sombras (mismo matiz, más oscuras) se descartan.
 3. **Recalibración en caliente:** se estima la traslación de la cámara con los perfiles de
-   luminancia y se desplaza el modelo de fondo. Los bloques siguen sobre la mesa.
-4. **Tiempo:** el transporte es una recta anclada a `AudioContext.currentTime`; el scheduler
+   luminancia y se desplaza el modelo de fondo. Los bloques siguen sobre la pared.
+4. **Música:** una melodía pentatónica en Do con progresión I–V–vi–IV. La silueta elige registro,
+   densidad, timbre, bajo y adorno; el cambio se aplica al empezar el compás y solo tras 0,9 s de
+   forma estable. Toda nota pertenece a la escala o al acorde: no puede desafinar.
+5. **Tiempo:** el transporte es una recta anclada a `AudioContext.currentTime`; el scheduler
    programa con 120 ms de lookahead (1,6 s en segundo plano). Cambiar BPM reancla sin saltar.
-5. **Audio:** cada sample se sintetiza una vez con `OfflineAudioContext` y se reproduce con
-   `AudioBufferSourceNode`; 48 voces simultáneas como máximo.
-6. **Licencia:** el servidor guarda solo `SHA-256(pepper:token)`, canjea de forma atómica y
+6. **Audio:** cada sample se sintetiza una vez con `OfflineAudioContext` y se reproduce con
+   `AudioBufferSourceNode`; la melodía se afina con `playbackRate`. 48 voces como máximo.
+7. **Licencia:** el servidor guarda solo `SHA-256(pepper:token)`, canjea de forma atómica y
    vincula el código al `deviceId` local.
 
 ## Despliegue
@@ -115,6 +124,10 @@ docs/                manifiesto, arquitectura, backlog, decisiones, QA y UX
 - El disparo se resuelve al programar la nota (hasta 120 ms antes del cruce visual).
 - La calibración con cámara requiere que la pestaña esté visible (usa `requestAnimationFrame`).
 - `BarcodeDetector` no existe en todos los navegadores; hay respaldo `jsQR` y entrada manual.
+- La música depende de la **silueta**, no de contar piezas: apilar bloques del mismo color no
+  añade notas, cambia el registro o la densidad de la canción.
+- Las piezas que se tocan se fusionan en un solo blob; es intencionado (ver `docs/DECISIONS.md`).
+- El registro más grave de la marimba suena apagado; pendiente de ajuste de timbre.
 
 ## Documentación
 

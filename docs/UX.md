@@ -42,11 +42,12 @@ Abrir la URL
                │
                ▼
         SESIÓN EN VIVO
-         ├─ Calibrar (mesa vacía) → banner de confirmación
-         ├─ Colocar bloques → la línea barre y suena la columna
+         ├─ Calibrar (pared vacía) → banner de confirmación
+         ├─ Construir con bloques → la línea barre y suena la melodía
+         ├─ La forma de la estructura cambia la variación en el compás siguiente
          ├─ ⟳ Recalibrar rápido (sin cortar la música)
-         ├─ Sonidos → kit + color → sample
-         ├─ Ajustes → rejilla, sensibilidad, latencia, volumen, metrónomo, fuente
+         ├─ Sonidos → kit + color → sample (modo bloque → sonido)
+         ├─ Ajustes → rejilla, sensibilidad, latencia, volumen, melodía, acentos
          └─ Desactivar este kit → vuelve al bloqueo
 ```
 
@@ -91,15 +92,18 @@ Tres permisos explicados en lista, no en un muro de texto:
 
 1. **Cámara** — “El video se procesa aquí y nunca se sube a internet.”
 2. **Sonido** — “El navegador lo pedirá al primer toque. Sube el volumen.”
-3. **Mesa despejada** — “Retira los bloques y toca Calibrar una sola vez.”
+3. **Pared despejada** — “Deja la pared vacía y toca Calibrar una sola vez.”
 
-Consejo al pie: “Usa la cámara trasera y apoya el teléfono en la base del kit.”
+Consejo al pie: “Coloca el móvil en el soporte del kit, en horizontal y mirando a la pared.”
 El botón primario se deshabilita mientras arranca y muestra “Preparando…”.
 
 ### 4.4 Sesión en vivo (`live`)
 
 - **Escena:** video a pantalla completa (o mesa sintética) con la línea de barrido.
-- **HUD superior:** marca, estado, BPM, número de bloques, FPS opcional y fuente (`Cámara`/`Virtual`).
+- **HUD superior:** marca, estado, BPM, número de bloques, **variación vigente**, FPS opcional y
+  fuente (`Cámara`/`Virtual`).
+- **Chip de variación:** texto corto que describe lo que está sonando ahora mismo
+  (`Melodía base`, `marimba · agudo · corcheas · bajo`). Solo aparece con la melodía guiada activa.
 - **Dock inferior:** reproducción, tempo, calibrar, recalibrar, sonidos, ajustes y silencio.
 - **Banner contextual:** aparece bajo el HUD; en errores no se autocierra.
 - **Toasts:** confirmaciones breves (1,2–4,2 s) en la esquina inferior, `role="status"`.
@@ -132,23 +136,44 @@ Estados del chip:
 | Compensación de cámara | 0–300 ms | Alinea lo que se ve con lo que suena |
 | Volumen | 0–100 % | — |
 | Clic de referencia | Sí/No | Pulso al inicio de cada barrido |
+| Melodía guiada | Sí/No | La forma de los bloques cambia la canción sin romper la armonía. Desactivado: modo bloque → sonido. |
+| Acentos de los bloques | Sí/No | Un toque suave al cruzar un bloque, siempre dentro de la escala |
 | Mostrar rendimiento | Sí/No | FPS y ms por frame |
 | Fuente de video | Cámara / Bloques virtuales | La cámara se deshabilita en demo |
-| Calibración | **Calibrar con la mesa vacía**, **Recalibrar rápido** | La rápida no detiene la música |
+| Calibración | **Calibrar con la pared vacía**, **Recalibrar rápido** | La rápida no detiene la música |
 | Salir | **Desactivar este kit** / **Salir de la prueba** | Rojo, acción destructiva |
 
 Pie: “Bloques Sonoros v0.1.0 · El video nunca sale de este dispositivo.”
 
 ### 4.7 Hoja **Cómo se juega**
 
-Cuatro pasos numerados: apoyar el móvil, calibrar con la mesa vacía, colocar bloques, recalibrar
-si la cámara se mueve. Cierre **Entendido**. Se abre desde Ajustes para no añadir ruido al dock.
+Cuatro pasos numerados: colocar el móvil en el soporte frente a la pared, calibrar con la pared
+vacía, construir con los bloques y recalibrar si la cámara se mueve. Cierre **Entendido**. Se abre
+desde Ajustes para no añadir ruido al dock.
+
+### 4.8 Cómo cambia la música (HU-12)
+
+La app no asigna una nota a cada bloque: siempre suena una melodía infantil en Do, y la **forma**
+de la construcción la varía. Esto evita el caos con muchas piezas y garantiza que nada desafine.
+
+| Lo que hace el niño | Lo que se oye |
+| --- | --- |
+| Construye alto | La melodía sube de octava |
+| Cubre más pared | El ritmo pasa de negras a corcheas o semicorcheas |
+| Usa otro color dominante | Cambia el instrumento solista (marimba, campana, pizzicato) |
+| Extiende una base ancha | Entra el bajo y una tercera paralela |
+| Hace una forma irregular o muy llena | Aparece un arpegio de cierre o un trino |
+
+- El cambio se aplica **al empezar el compás**, no a mitad de nota.
+- Solo se confirma si la forma se mantiene **0,9 s**; mover un bloque no reescribe la canción.
+- El chip del HUD dice qué está sonando; si el profesor desactiva **Melodía guiada**, vuelve el
+  modo bloque → sonido clásico.
 
 ## 5. Anatomía de la escena
 
 ```
 ┌──────────────────────────────────────────────┐
-│ HUD: marca · estado · BPM · bloques · fps    │  ← chips translúcidos
+│ HUD: marca · estado · BPM · bloques · variación  │  ← chips translúcidos
 │                                              │
 │   ┊        ┊        ┊        ┊        ┊      │  ← rejilla de columnas (punteada)
 │   ┊   ▢    ┊        ┊   ▢    ┊        ┊      │  ← cajas de detección por color
@@ -267,9 +292,11 @@ producto, no decoración.
 
 ## 9. Copy y tono
 
-- Tuteo directo, frases cortas, sin tecnicismos: “Retira los bloques y toca Calibrar”.
-- La app habla de **kit**, **bloques**, **mesa**, **línea** y **sonidos**, no de “modelo de fondo”,
-  “blob” ni “scheduler”.
+- Tuteo directo, frases cortas, sin tecnicismos: “Deja la pared vacía y toca Calibrar”.
+- La app habla de **kit**, **bloques**, **pared**, **línea**, **melodía** y **sonidos**, no de
+  “modelo de fondo”, “blob” ni “scheduler”.
+- La variación se explica en positivo: “La forma de la torre cambia la canción”, nunca como una
+  lista de parámetros técnicos.
 - Los errores incluyen la salida: “No pudimos abrir la cámara. Revisa el permiso o usa bloques
   virtuales.”
 - Las confirmaciones son específicas: “Rejilla de 8 pasos”, “Rojo → Chasquido”, “Fondo calibrado”.
@@ -280,8 +307,8 @@ producto, no decoración.
 | Situación | Mensaje | Recuperación |
 | --- | --- | --- |
 | Cámara denegada | “No pudimos abrir la cámara…” | Revisar permiso o **Bloques virtuales** |
-| Sin calibración | “Primero calibra el fondo con la mesa vacía.” | Banner con **Calibrar ahora** |
-| Calibración fallida | “No pudimos calibrar: …” | Reintentar con la mesa vacía |
+| Sin calibración | “Primero calibra el fondo con la pared vacía.” | Banner con **Calibrar ahora** |
+| Calibración fallida | “No pudimos calibrar: …” | Reintentar con la pared vacía |
 | Demo vencida | “La prueba de 20 minutos terminó…” | **Activar kit** |
 | Kit en otro dispositivo | “Este kit ya está activado en otro dispositivo…” | Código del manual o soporte |
 | Código inválido | Error de checksum o “no existe” | El campo se selecciona para corregir |

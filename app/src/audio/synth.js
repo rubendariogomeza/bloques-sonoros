@@ -27,6 +27,20 @@ export const SAMPLE_LABELS = Object.freeze({
   chime: 'Carillón',
 });
 
+/**
+ * Altura real de cada sample melódico, en nota MIDI.
+ *
+ * El motor afina por `playbackRate`: conociendo la nota de origen se puede pedir
+ * una nota concreta y la melodía deja de depender del sample elegido.
+ */
+export const SAMPLE_BASE_MIDI = Object.freeze({
+  marimba: 72, // Do5 · 523,25 Hz
+  bell: 81, // La5 · 880 Hz
+  pluck: 64, // Mi4 · 329,6 Hz
+  bass: 45, // La2 · 110 Hz
+  chime: 84, // Do6 aproximado
+});
+
 const NOISE_SECONDS = 1.2;
 
 function makeGain(ctx, out, peak, attack, decay, start = 0) {

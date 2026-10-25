@@ -269,6 +269,18 @@ export function createSheets({ root, handlers }) {
           onInput: (value) => handlers.onVolume(value / 100),
         }),
         toggle({
+          label: 'Melodía guiada',
+          hint: 'La forma de los bloques cambia la canción sin romper la armonía. Desactívalo para volver al modo bloque → sonido.',
+          checked: state.melody,
+          onChange: (checked) => handlers.onMelody(checked),
+        }),
+        toggle({
+          label: 'Acentos de los bloques',
+          hint: 'Un toque suave cada vez que la línea cruza un bloque, siempre dentro de la escala.',
+          checked: state.accents,
+          onChange: (checked) => handlers.onAccents(checked),
+        }),
+        toggle({
           label: 'Clic de referencia',
           hint: 'Un pulso suave al inicio de cada barrido para seguir el tempo.',
           checked: state.metronome,

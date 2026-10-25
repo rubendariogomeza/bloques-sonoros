@@ -109,3 +109,33 @@ El acceso al software está anclado a la venta de un **kit físico** (bloques de
 *   **Criterios de Aceptación:**
     1. Mostrar video en vivo con línea translúcida superpuesta.
     2. Generar destello visual en pantalla cuando la línea cruza y activa un bloque.
+
+### ÉPICA 5: MELODÍA REACTIVA
+
+> Revisión del 24/10/2026 tras probar el kit real: el mapeo bloque → sonido uno a uno produce
+> caos con muchas piezas. La música pasa a ser una melodía continua que la **forma de la
+> estructura** varía sin romper la armonía. HU-08 y HU-09 quedan como modo alternativo
+> («bloque → sonido»), no como comportamiento por defecto.
+
+**HU-12: Melodía que cambia de forma con la estructura**
+*   *Como* niño, *Quiero* que al cambiar la forma de mi construcción la canción cambie de manera
+    notable pero sin desafinar, *Para* sentir que compongo música sin necesidad de acertar notas.
+*   **Criterios de Aceptación:**
+    1. Suena una melodía infantil continua en una tonalidad fija, con acompañamiento armónico,
+       desde el primer compás.
+    2. La silueta de la estructura (altura, superficie ocupada, color dominante, base y simetría)
+       elige una variación entre valores acotados: registro, densidad rítmica, instrumento,
+       bajo y adorno.
+    3. La variación se aplica al empezar un compás, nunca a mitad de nota, y solo si la silueta
+       lleva al menos 0,9 s estable.
+    4. Toda nota pertenece a la escala pentatónica o al acorde del compás: ninguna combinación
+       de bloques puede sonar disonante.
+    5. Cruzar un bloque produce un acento suave y afinado; el profesor puede desactivarlo.
+
+**HU-13: Montaje en pared con soporte impreso en 3D**
+*   *Como* profesor, *Quiero* colocar el móvil en horizontal frente a la pared donde construyen
+    los niños, *Para* encuadrar la estructura completa sin pedirles que miren la pantalla.
+*   **Criterios de Aceptación:**
+    1. La app funciona con encuadre apaisado y frontal sobre una pared o un tablero vertical.
+    2. Las sombras del móvil y de las manos no se detectan como bloques.
+    3. La calibración se hace con la pared vacía y la recalibración rápida no corta la música.

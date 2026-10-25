@@ -14,6 +14,8 @@ import { createVisionEngine } from './vision/engine.js';
 import { createTransport } from './sequencer/transport.js';
 import { createScheduler, LOOKAHEAD_BACKGROUND, LOOKAHEAD_FOREGROUND } from './sequencer/scheduler.js';
 import { createAudioEngine } from './audio/engine.js';
+import { createMelodyPlayer } from './audio/melody.js';
+import { BASE_INTENT, createIntentTracker, describeIntent } from './music/variation.js';
 import { KITS, KIT_IDS, getKit, defaultMapping, sampleLabel } from './audio/kits.js';
 import { createOverlay } from './ui/overlay.js';
 import { createHud } from './ui/hud.js';
@@ -60,7 +62,11 @@ const live = {
   calibrated: false,
   calibrating: false,
   mode: 'camera',
+  intent: BASE_INTENT,
 };
+
+const intentTracker = createIntentTracker({ holdMs: 900 });
+const melody = createMelodyPlayer({ audio, stepsPerBar: settings.columns });
 
 const palette = [...COLOR_CLASSES];
 
@@ -80,6 +86,8 @@ function loadSettings() {
     sensitivity: clamp(Number(merged.sensitivity) ?? DEFAULTS.sensitivity, 0, 1),
     latencyMs: clamp(Math.round(Number(merged.latencyMs) || 0), 0, 300),
     metronome: Boolean(merged.metronome),
+    melody: merged.melody !== false,
+    accents: merged.accents !== false,
     showStats: Boolean(merged.showStats),
     muted: Boolean(merged.muted),
     mappings: mappingStore,
@@ -161,6 +169,9 @@ async function startSession(mode = 'camera') {
   live.blocks = [];
   live.flashes = [];
   live.progress = 0;
+  live.intent = BASE_INTENT;
+  intentTracker.reset();
+  melody.reset();
 
   transport.setColumns(settings.columns, audio.currentTime);
   transport.setBpm(settings.bpm, audio.currentTime);
@@ -226,6 +237,10 @@ async function play() {
   if (!scheduler) return;
   await audio.resume().catch(() => {});
   const resuming = scheduler.stepsScheduled > 0;
+  if (!resuming) {
+    intentTracker.reset();
+    melody.reset();
+  }
   scheduler.start({ reset: !resuming });
   updateChrome();
 }
@@ -241,26 +256,45 @@ async function togglePlay() {
   updateChrome();
 }
 
-function handleStep({ column, time }) {
+function handleStep({ column, time, pass }) {
   if (!session) return;
   const now = performance.now();
+  const when = time + settings.latencyMs / 1000;
+  const intent = live.intent ?? BASE_INTENT;
   const active = session.engine.columns.active(now);
   const found = active.find((item) => item.column === column);
-  const when = time + settings.latencyMs / 1000;
+
+  if (settings.melody) {
+    // La variación se aplica al empezar el compás: nunca a mitad de nota.
+    if (column === 0) melody.beginBar({ bar: pass, intent, stepsPerBar: settings.columns });
+    melody.playStep({ bar: pass, step: column, intent, stepsPerBar: settings.columns, when });
+  }
 
   if (!found) {
     if (settings.metronome) audio.click(when);
     return;
   }
 
+  const mapping = settings.melody ? audio.getMapping() : null;
+  const accents = settings.melody && settings.accents && column % 2 === 0;
+  let accentCount = 0;
+
   for (const entry of found.entries) {
-    audio.playColor(entry.color, {
-      when,
-      y: entry.y,
-      column,
-      columns: settings.columns,
-      gain: 0.92,
-    });
+    if (settings.melody) {
+      // El acento es un adorno: dos por paso como máximo para no tapar la melodía.
+      if (accents && accentCount < 2) {
+        melody.playAccent({ sampleId: mapping[entry.color], column, columns: settings.columns, when });
+        accentCount += 1;
+      }
+    } else {
+      audio.playColor(entry.color, {
+        when,
+        y: entry.y,
+        column,
+        columns: settings.columns,
+        gain: 0.92,
+      });
+    }
     live.flashes.push({ column, color: entry.color, at: now });
   }
   if (live.flashes.length > 64) live.flashes.splice(0, live.flashes.length - 64);
@@ -322,6 +356,7 @@ function startLoop() {
       live.stats = result.stats;
       live.calibrating = Boolean(result.calibrating);
       live.calibrated = Boolean(result.stats?.calibrated) && !result.calibrating;
+      if (result.structure) live.intent = intentTracker.update(result.structure, ts);
     }
 
     live.progress = transport.progressAt(audio.currentTime);
@@ -385,6 +420,7 @@ function updateChrome() {
     fps: live.stats?.fps ?? 0,
     mode: live.mode,
     showStats: settings.showStats,
+    variation: settings.melody ? describeIntent(live.intent) : null,
   });
 }
 
@@ -431,6 +467,18 @@ function setVolume(value) {
 
 function setMetronome(value) {
   settings.metronome = Boolean(value);
+  saveSettings();
+}
+
+function setMelody(value) {
+  settings.melody = Boolean(value);
+  melody.reset();
+  saveSettings();
+  updateChrome();
+}
+
+function setAccents(value) {
+  settings.accents = Boolean(value);
   saveSettings();
 }
 
@@ -652,6 +700,8 @@ const handlers = {
       latencyMs: settings.latencyMs,
       volume: settings.volume,
       metronome: settings.metronome,
+      melody: settings.melody,
+      accents: settings.accents,
       showStats: settings.showStats,
       mode: live.mode,
       cameraAllowed: license.features().camera,
@@ -667,6 +717,8 @@ const handlers = {
   onLatency: (value) => setLatency(value),
   onVolume: (value) => setVolume(value),
   onMetronome: (value) => setMetronome(value),
+  onMelody: (value) => setMelody(value),
+  onAccents: (value) => setAccents(value),
   onStats: (value) => setStats(value),
   onMode: (mode) => changeMode(mode),
   onSignOut: () => signOut(),

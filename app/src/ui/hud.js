@@ -26,21 +26,32 @@ export function createHud({ hudRoot, bannerRoot, toastRoot }) {
     el('span', { text: 'fps' }),
   ]);
   const modeChip = el('span', { class: 'chip chip--warn', hidden: true }, [el('span', { text: 'Virtual' })]);
+  const variationChip = el('span', { class: 'chip chip--optional chip--variation', hidden: true }, [
+    el('b', { text: 'Melodía base' }),
+  ]);
 
-  hudRoot.append(brand, el('div', { class: 'hud__chips' }, [stateChip, bpmChip, blocksChip, statsChip, modeChip]));
+  hudRoot.append(
+    brand,
+    el('div', { class: 'hud__chips' }, [stateChip, bpmChip, blocksChip, variationChip, statsChip, modeChip]),
+  );
 
   const bpmValue = bpmChip.querySelector('b');
   const blocksValue = blocksChip.querySelector('b');
   const statsValue = statsChip.querySelector('b');
   const stateValue = stateChip.querySelector('b');
   const dot = stateChip.querySelector('.dot');
+  const variationValue = variationChip.querySelector('b');
 
   let bannerTimer = null;
 
-  function update({ state, bpm, blocks, fps, mode, showStats }) {
+  function update({ state, bpm, blocks, fps, mode, showStats, variation }) {
     if (bpm != null) setText(bpmValue, String(Math.round(bpm)));
     if (blocks != null) setText(blocksValue, String(blocks));
     if (fps != null) setText(statsValue, String(fps));
+    if (variation !== undefined) {
+      variationChip.hidden = !variation;
+      if (variation) setText(variationValue, variation);
+    }
     if (state) {
       setText(stateValue, state.label);
       stateChip.classList.toggle('chip--live', state.kind === 'live');

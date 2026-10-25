@@ -1,6 +1,6 @@
 # QA y riesgos
 
-> Última corrida: **24/10/2026** · `node --test` → **55 pruebas, 55 pasan, 0 fallos, 0 omitidas**.
+> Última corrida: **24/10/2026** · `node --test` → **88 pruebas, 88 pasan, 0 fallos, 0 omitidas**.
 > Este documento distingue lo que está **probado de forma automática** de lo que **solo puede
 > validarse con el kit físico**. No se marca como verificado nada que no se haya ejecutado.
 
@@ -13,7 +13,11 @@
 - Formato y checksum de tokens; canje y verificación de licencias.
 - Servidor HTTP: archivos estáticos, cabeceras, traversal, rate limit, API de licencias.
 - Pipeline de visión con frames sintéticos: fondo, luz, histéresis, morfología, blobs, capas,
-  columnas, TTL y alineación por traslación.
+  columnas, TTL, alineación por traslación y rechazo de sombras.
+- Silueta de la estructura (ocupación, altura, base, color dominante, simetría).
+- Variación armónica: cuantización de la silueta, estabilidad de 900 ms y armonía de todas las
+  combinaciones posibles.
+- Reproductor de melodía: agenda en el lookahead, afinación por `playbackRate` y acentos.
 - Mapeo color → sample y altura → semitono en los tres kits.
 
 ### No cubierto por la suite (requiere navegador u hardware)
@@ -39,9 +43,9 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
   `localStorage['mt.license.v1']` y `localStorage['mt.device.v1']`.
 - La cámara solo funciona en `localhost` o HTTPS (contexto seguro).
 
-## 3. Matriz automatizada (55 pruebas)
+## 3. Matriz automatizada (88 pruebas)
 
-### 3.1 Audio y tiempo — 16 pruebas
+### 3.1 Audio y tiempo — 24 pruebas
 
 | Archivo | Prueba | Qué protege | HU |
 | --- | --- | --- | --- |
@@ -61,6 +65,14 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | los semitonos se convierten en factor de reproducción | transposición correcta | HU-08 |
 | | todos los kits cubren los 10 colores con samples existentes | ningún color mudo | HU-08/10 |
 | | sanitizeMapping rellena huecos y descarta ids inválidos | ajustes corruptos no rompen el audio | HU-10 |
+| `audio-melody.test.js` | afina con playbackRate sobre la nota real del sample | melodía sin un buffer por nota | HU-12 |
+| | solo los samples con altura definida sirven de acento | percusión no desafina | HU-12 |
+| | el acento sube de grave a agudo de izquierda a derecha | columna → altura | HU-12 |
+| | el acento cae en la pentatónica con cualquier timbre | 5 timbres × 16 columnas en escala | HU-12 |
+| | el reproductor agenda todas las notas del compás una sola vez | sin duplicados ni pérdidas | HU-12 |
+| | el timbre y el bajo eligen el sample correcto | variación audible | HU-12 |
+| | cambiar de compás recarga la melodía sin repetir notas | frontera de compás limpia | HU-12 |
+| | un acento con sample no afinado cae en el carillón | respaldo seguro | HU-12 |
 
 ### 3.2 Licencias y servidor — 17 pruebas
 
@@ -84,7 +96,7 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | códigos inexistentes o mal formados no pasan | validación de entrada | HU-01 |
 | | limita la tasa de peticiones de licencia | 30 POST/min por IP | — |
 
-### 3.3 Visión — 22 pruebas
+### 3.3 Visión — 31 pruebas
 
 | Archivo | Prueba | Qué protege | HU |
 | --- | --- | --- | --- |
@@ -110,6 +122,36 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | etiqueta dos componentes separadas con área y caja correctas | dos bloques próximos | HU-08 |
 | | descarta blobs por debajo del área mínima | motas y sombras pequeñas | HU-03 |
 | | conectividad en diagonal une una torre inclinada | torres mal apiladas | HU-09 |
+| `vision-structure.test.js` | mide ocupación, altura y base de la silueta | la forma es la fuente de la variación | HU-12 |
+| | elige el color dominante ignorando el fondo | timbre estable | HU-12 |
+| | una pared vacía devuelve una silueta vacía | melodía base sin bloques | HU-12 |
+| | reutiliza el objeto entre frames y respeta el cambio de rejilla | cero allocations y 8/12/16/24 | HU-12 |
+| `vision-mask.test.js` | una sombra sobre la pared no es un bloque | sombra del móvil | HU-13 |
+| | una sombra fuerte tampoco entra en la máscara | sombra de la mano | HU-13 |
+| | un bloque oscuro sí es un bloque | no confundir negro con sombra | HU-13 |
+| | un bloque de color se detecta aunque esté en penumbra | aula con poca luz | HU-13 |
+| | un cambio global de luz se compensa con el factor de luz | deriva de exposición | HU-05 |
+
+### 3.4 Música — 16 pruebas
+
+| Archivo | Prueba | Qué protege | HU |
+| --- | --- | --- | --- |
+| `music-song.test.js` | toda variación se queda dentro de la escala y del acorde | 162 variaciones × 8 compases sin disonancia | HU-12 |
+| | la melodía base llena el compás y va ordenada | compás completo desde el inicio | HU-12 |
+| | más densidad añade notas, no las quita | la variación es monótona | HU-12 |
+| | el registro sube o baja la melodía una octava | cambio notable de altura | HU-12 |
+| | el bajo solo suena con base ancha y toca la fundamental | bajo ligado a la forma | HU-12 |
+| | el arpegio cierra el compás con notas del acorde | adorno consonante | HU-12 |
+| | la rejilla de 8 pasos también cabe en el compás | 8/12/16/24 columnas | HU-12 |
+| | los grados pentatónicos saltan de octava al pasar de La | aritmética de grados | HU-12 |
+| `music-variation.test.js` | la pared vacía usa la melodía base | estado neutro | HU-12 |
+| | la altura de la estructura elige el registro | silueta → música | HU-12 |
+| | la densidad sale de la superficie ocupada | silueta → música | HU-12 |
+| | el color dominante elige el timbre | silueta → música | HU-12 |
+| | base ancha y forma irregular se oyen | bajo y adorno | HU-12 |
+| | describeIntent resume la variación en una línea | texto del HUD | HU-12 |
+| | la variación solo se aplica cuando la silueta se mantiene estable | 900 ms de histéresis | HU-12 |
+| | un cambio fugaz no reescribe la canción | mover un bloque no cambia el compás | HU-12 |
 
 ## 4. Matriz manual en navegador
 
@@ -137,19 +179,27 @@ Estados: ✅ verificado · 🟡 parcial · ⬜ pendiente.
 | M-18 | Actualización | Subir `VERSION` y recargar | Aviso “Versión nueva lista” | ⬜ |
 | M-19 | Cámara denegada | Bloquear el permiso y pulsar **Iniciar sesión musical** | Error accionable y opción de bloques virtuales | ⬜ |
 | M-20 | Demo vencida | Esperar 20 min o adelantar el reloj | Vuelve al bloqueo con mensaje de fin de prueba | ⬜ (no se esperó el tiempo completo) |
+| M-21 | Variación por silueta | En simulador, colocar bloques altos y luego extendidos | El chip del HUD cambia (`grave/medio/agudo`, `negras/corcheas`) al empezar el compás | ✅ |
+| M-22 | Armonía audible | Escuchar 30 s con varias formas | Ninguna nota desafina; la melodía sigue reconocible | ✅ |
+| M-23 | Acentos | Ajustes → desactivar **Acentos de los bloques** | Cruzar bloques ya no produce el toque extra; la melodía continúa | ✅ |
+| M-24 | Modo bloque → sonido | Ajustes → desactivar **Melodía guiada** | Vuelve el disparo por color y altura (HU-08/09) | ✅ |
+| M-25 | Sombra sobre la pared | Mover la mano entre el móvil y la pared sin tocar bloques | La variación no cambia y no aparecen bloques fantasma | 🟡 (cubierto por prueba; falta pared real) |
 
 ## 5. Plan de validación con hardware
 
 > Requiere el kit físico. Ejecutar en al menos: un Android de gama media, un iPhone reciente y un
 > portátil con webcam. Registrar modelo, navegador, versión y condiciones de luz.
 
-### 5.1 Cámara y encuadre (HU-02/03/11)
+### 5.1 Cámara y encuadre (HU-02/03/11/13)
 
-1. Apoyar el móvil en la base del kit, cámara trasera hacia la mesa.
-2. Comprobar que la mesa ocupa el ancho completo y que no hay dedos ni funda en el encuadre.
-3. Calibrar con la mesa vacía y colocar un bloque en cada una de las 10 columnas.
-4. **Criterio:** los 10 bloques se dibujan con su color correcto y el contador del HUD coincide.
-5. Repetir con la cámara a 20, 30 y 45 cm y anotar la distancia mínima fiable.
+1. Colocar el móvil en el soporte impreso en 3D, en horizontal, con la cámara hacia la pared.
+2. Comprobar que la estructura entra completa y que no hay dedos, funda ni borde del soporte.
+3. Calibrar con la pared vacía y construir en cada una de las 16 columnas.
+4. **Criterio:** el contador del HUD coincide con lo construido y el chip de variación reacciona
+   en el compás siguiente.
+5. Repetir a 40, 70 y 100 cm de la pared y anotar la distancia mínima fiable.
+6. Probar el móvil en horizontal y en vertical: el recorte «cover» debe mantener la estructura
+   centrada en ambos casos.
 
 ### 5.2 Iluminación (HU-05)
 
@@ -230,6 +280,17 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 - Copia de seguridad: parar el servidor, copiar `server/data/licenses.json`, restaurarlo y
   comprobar que un código ya canjeado sigue canjeado.
 
+### 5.10 Melodía reactiva (HU-12)
+
+1. Empezar con la pared vacía: debe sonar la melodía base, sin huecos y sin acentos.
+2. Construir una torre alta: en el siguiente compás el registro sube y el chip cambia.
+3. Extender una base ancha: debe entrar el bajo y la tercera paralela.
+4. Cambiar de color dominante (amarillo → azul): debe cambiar el instrumento solista.
+5. Mover un bloque suelto y devolverlo en < 1 s: la canción **no** debe cambiar.
+6. **Criterio:** 0 notas fuera de la pentatónica de Do o del acorde del compás en 2 minutos de
+   improvisación; el pulso no se interrumpe en ningún cambio de forma.
+7. Repetir con **Acentos** desactivado y con **Melodía guiada** desactivado (modo bloque → sonido).
+
 ## 6. Riesgos
 
 | ID | Riesgo | Prob. | Impacto | Mitigación | Dueño |
@@ -246,6 +307,10 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | R-10 | Accesibilidad incompleta (lector de pantalla, zoom) | Media | Medio | Foco atrapado, `aria-*`, `:focus-visible`; falta auditoría formal | UX/QA |
 | R-11 | Rotura de la calibración al mover la base | Alta | Bajo | **⟳ Recalibrar rápido** sin cortar la música; recalibrar en frío si el giro es grande | CV |
 | R-12 | Primer toque tras el modo idle añade un bloque en simulador | Baja | Bajo | El primer toque solo despierta los controles | UX |
+| R-13 | Las piezas que se tocan se fusionan y la variación no distingue piezas | Alta | Bajo | Por diseño: la música depende de la silueta, no de las piezas (ADR-15) | CV |
+| R-14 | La madera del fondo se clasifica como `orange` | Alta | Medio | La calibración la elimina; vigilar cambios de luz y de encuadre | CV |
+| R-15 | Una estructura enorme supera `maxArea = 45 %` y desaparece del HUD | Media | Bajo | La melodía no depende de los blobs; subir el límite si el HUD queda vacío | CV |
+| R-16 | La variación cambia demasiado a menudo y distrae | Media | Medio | Histéresis de 900 ms y cambio solo en la columna 0 | Audio |
 
 ## 7. Limitaciones conocidas
 
@@ -258,6 +323,9 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 - `BarcodeDetector` no existe en todos los navegadores; hay respaldo `jsQR`, foto y entrada manual.
 - El desbloqueo local es copiable por diseño offline; la autoridad es el servidor.
 - El modo demo dura 20 minutos, solo permite simulador y se pierde al cerrar la pestaña.
+- La variación musical se decide por **silueta**: apilar piezas del mismo color no añade notas,
+  cambia el registro/la densidad de la canción.
+- La marimba una octava abajo (`register 0`) suena opaca; pendiente de ajuste de timbre.
 
 ## 8. Criterios de salida (release gate)
 
@@ -277,4 +345,7 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | --- | --- | --- | --- |
 | 24/10/2026 | Windows 11 · Node 24.19.0 | 55/55 | Suite completa; servidor en puerto efímero |
 | 24/10/2026 | Chrome · simulador | ✅ | Activación manual, onboarding, BPM, pausa, rejilla, kits, mapeo, demo |
-| Pendiente | Android / iPhone + kit | — | Cámara, QR impreso, luz, latencia, PWA |
+| 24/10/2026 | Windows 11 · Node 24.19.0 | 88/88 | Añadidas silueta, variación, canción, melodía y sombras |
+| 24/10/2026 | Chrome · simulador | ✅ | HU-12: 34–44 notas/8 s, 0 fuera de escala; BPM 100→140 sin cortes; pausa detiene el agendado |
+| 24/10/2026 | Chrome · sondeo de vídeo del kit | ✅ | 14 fotogramas: piezas fusionadas, mesa `orange`, blob > 50 % → origen de ADR-15 |
+| Pendiente | Android / iPhone + kit | — | Cámara, QR impreso, luz, latencia, PWA, pared |

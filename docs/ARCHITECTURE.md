@@ -28,9 +28,10 @@ app/src/
   auth/qr.js            BarcodeDetector → jsQR → foto → entrada manual
 
   vision/background.js  modelo de fondo + deriva de luz
-  vision/mask.js        umbral dinámico, histéresis, cromaticidad
+  vision/mask.js        umbral dinámico, histéresis, cromaticidad, rechazo de sombras
   vision/morphology.js  apertura/cierre 3×3 separable
   vision/components.js  etiquetado 8-conectado, área, caja, fill
+  vision/structure.js   silueta: ocupación por columna, altura, base, color dominante
   vision/layers.js      bandas de color verticales (torres)
   vision/columns.js     confirmación, TTL y estado musical por columna
   vision/align.js       estimación de traslación + desplazamiento del fondo
@@ -42,9 +43,13 @@ app/src/
   sequencer/scheduler.js  lookahead sobre el reloj de audio
   sequencer/pattern.js    escalas y altura → semitonos
 
+  music/song.js         progresión, melodía pentatónica y variaciones por compás
+  music/variation.js    silueta → variación (registro, densidad, timbre, bajo, adorno)
+
   audio/synth.js        síntesis offline de samples (sin assets)
   audio/kits.js         kits y mapeos color → sample
   audio/engine.js       AudioContext, voces, ganancia, mute
+  audio/melody.js       agenda la melodía y los acentos en el lookahead
 
   ui/dom.js             helpers mínimos de DOM
   ui/overlay.js         video + rejilla + barrido + cajas + destellos
@@ -56,8 +61,9 @@ app/src/
   main.js               composición: licencia → sesión → bucle → UI
 ```
 
-Reglas de dependencia: `ui → core`, `main → todas`, `sequencer → core`, `audio → core`,
-`vision → core`. Nunca `core → ui` ni `vision → ui`.
+Reglas de dependencia: `ui → core`, `main → todas`, `sequencer → core`, `music → core`,
+`audio → core`, `vision → core`. Nunca `core → ui` ni `vision → ui`. `music/` no importa
+nada de `audio/` ni de `vision/`: recibe datos planos y devuelve notas.
 
 ## 3. Flujo de arranque
 
@@ -111,23 +117,62 @@ timeOfBoundary(N) = anchorTime + (N / columns - anchorTotal) * sweepDuration
 ### 4.3 `createVisionEngine({ source, columns, sensitivity, fps })`
 
 - `process(now)` devuelve `null` si aún no toca frame; si no:
-  `{ blocks, stats, calibrating? }`.
-- `calibrate({ frames, timeoutMs })` promedia N frames (cámara, mesa vacía).
+  `{ blocks, structure, stats, calibrating? }`.
+- `structure` es la silueta medida sobre la máscara completa (no depende de separar piezas).
+  Se reutiliza el mismo objeto en cada frame: no se debe retener entre frames.
+- `calibrate({ frames, timeoutMs })` promedia N frames (cámara, pared vacía).
 - `calibrateOnce()` calibra con un frame (simulador, sin rAF).
 - `recalibrateFast()` marca la siguiente iteración para estimar el desplazamiento y mover el
   fondo (HU-04). No toca el transporte.
 - `setSensitivity`, `setColumns`, `setFps`, `dispose()`.
 - `blocks`: `[{ id, column, x, y, color, shape, confidence }]`, con `x` en 0..1.
+- `structure`: `{ columns[{ fill, top, bottom, height, color }], colorWeights, dominantColor,
+  coverage, mass, topHeight, baseWidth, symmetry, span, empty }`, todo normalizado 0..1.
 
-### 4.4 `createAudioEngine()`
+### 4.4 `createStructureExtractor(width, height, columns)`
+
+- `measure(binary, rgba)` recorre la máscara una vez y agrega por columna.
+- `fill` = proporción de la columna ocupada; `top`/`bottom` en 0..1 (0 = borde superior).
+- `mass` = media de `fill`; `topHeight` = media de `top` de las columnas ocupadas;
+  `baseWidth` = fracción de columnas que llegan al 70 % inferior; `symmetry` = 1 − asimetría.
+- `dominantColor` ignora blanco y negro si hay algún color saturado.
+- El color se muestrea en una rejilla 2×2: suficiente para la silueta y barato por frame.
+
+### 4.5 `createIntentTracker({ holdMs })` + `intentFromStructure(structure)`
+
+- `intentFromStructure` cuantiza la silueta en cinco dimensiones discretas:
+  `register` (0..2), `density` (0..2), `timbre` (0..2), `bass` (bool), `ornament` (0..2).
+- La cuantización es la que evita que el ruido del detector reescriba la canción.
+- `createIntentTracker` solo confirma una variación nueva si su `signature` se mantiene
+  `holdMs` (900 ms) estable; `reset()` vuelve a la melodía base.
+- `describeIntent(intent)` devuelve la etiqueta del HUD («campana · agudo · corcheas · bajo»).
+
+### 4.6 `renderBar(bar, intent, { stepsPerBar })`
+
+- Devuelve `[{ step, midi, gain, voice }]` con `voice` en `lead | harmony | bass`.
+- La melodía son grados pentatónicos; el arpegio usa notas del acorde del compás.
+- Invariante: toda nota pertenece a la pentatónica de Do o al acorde de su compás, para
+  cualquier combinación de `intent` (cubierto por prueba exhaustiva).
+
+### 4.7 `createAudioEngine()`
 
 - `init()` crea/reanuda el `AudioContext` (solo tras un gesto del usuario).
 - `loadKit(kitId)` sintetiza y cachea los samples que falten.
-- `playColor(color, { when, y, column, columns, gain })` agenda una voz.
+- `playColor(color, { when, y, column, columns, gain })` agenda una voz (modo bloque → sonido).
+- `playNote(sampleId, { when, midi, gain, pan })` afina con `playbackRate` sobre
+  `SAMPLE_BASE_MIDI`: una melodía sin renderizar un buffer por nota.
 - `click(when)` metrónomo; `setVolume`, `setMuted`, `setMapping`, `suspend`, `dispose`.
 - Tope de **48 voces** simultáneas; las voces se liberan en `ended`.
 
-### 4.5 Servidor de licencias
+### 4.8 `createMelodyPlayer({ audio, stepsPerBar })`
+
+- `beginBar({ bar, intent, stepsPerBar })` renderiza el compás al empezar el barrido.
+- `playStep({ bar, step, intent, stepsPerBar, when })` agenda las notas de ese paso.
+- `playAccent({ sampleId, column, columns, when })` toca un adorno pentatónico; si el sample
+  no tiene altura definida, cae en el carillón.
+- `reset()` al reiniciar el transporte.
+
+### 4.9 Servidor de licencias
 
 `createLicenseStore({ file, pepper })`:
 
@@ -159,21 +204,55 @@ Rate limit: 30 POST/minuto por IP. Cuerpo máximo: 8 KiB. Cabeceras CSP, `nosnif
 video/canvas
   → recorte central "cover" a 320×240
   → background: luma + cromaticidad normalizada
-  → mask: umbral dinámico (ruido) + histéresis (entrar/salir)
+  → mask: umbral dinámico (ruido) + histéresis (entrar/salir) + rechazo de sombras
   → morphology: apertura (quita píxeles sueltos) + cierre (rellena huecos)
+  → structure: silueta completa (ocupación, altura, base, color, simetría)
   → components: BFS 8-conectado, área mínima/máxima, fill
   → layers: color por fila + agrupación en bandas verticales
   → columns: confirmación por hits + TTL + una entrada por color
-  → main.handleStep: al cruzar la columna, dispara todos los colores
+  → main: intentTracker(silueta) → variación; handleStep → melodía + acentos
 ```
 
 - **Color:** se clasifica por cromaticidad, no por brillo, para tolerar cambios de luz.
+- **Sombra:** si el píxel conserva la cromaticidad del fondo y solo es más oscuro (ratio
+  0,3–0,92), no es un bloque. Sin esto, la sombra del móvil cambiaría la canción sola.
+- **Silueta:** es la fuente de la variación musical. No intenta separar piezas: con el kit real
+  los bloques se tocan y forman un único blob.
 - **Capas:** una torre es un solo blob; las bandas contiguas del mismo color se fusionan y las
   bandas finas (bordes/transiciones) se absorben en la vecina mayor.
 - **Columnas:** `confirmHits = 2` evita falsos positivos de un frame; `ttlMs = 340` evita cortes
   por parpadeos de detección.
 - **Alineación:** perfiles de luma por fila/columna + correlación normalizada. Devuelve la
   traslación del contenido y `shiftBackground` mueve el modelo, no la cámara.
+
+### 5.1 De la silueta a la música
+
+```
+structure ──► intentFromStructure ──► cuantización (5 dimensiones)
+                                        │
+                              intentTracker (900 ms estable)
+                                        │
+                            compás nuevo (columna 0) ──► renderBar
+                                        │
+                    ┌───────────────────┴────────────────────┐
+                 melodía (lead/harmony/bass)            acentos por columna
+```
+
+| Silueta | Variación | Efecto audible |
+| --- | --- | --- |
+| `topHeight` bajo (estructura alta) | `register` 0/1/2 | una octava abajo / centro / arriba |
+| `mass` (superficie ocupada) | `density` 0/1/2 | negras / corcheas / semicorcheas |
+| `dominantColor` | `timbre` 0/1/2 | marimba / campana / pizzicato |
+| `baseWidth` | `bass` | añade bajo y tercera paralela |
+| `symmetry` / `mass` alto | `ornament` | arpegio de cierre o trino |
+
+- La variación **solo se aplica al empezar el compás**, nunca a mitad de nota: el cambio se oye
+  pero no rompe el pulso (HU-07 sigue intacto).
+- `holdMs = 900` exige estabilidad: colocar un bloque no reescribe la canción al instante.
+- Toda nota cae en la pentatónica de Do o en el acorde del compás, así que ninguna combinación
+  desafina (prueba exhaustiva de 162 variaciones × 8 compases).
+- Los acentos son un adorno: máximo dos por paso y solo en pasos pares, para no tapar la melodía.
+
 
 ## 6. Invariantes y dónde se garantizan
 
@@ -184,6 +263,8 @@ video/canvas
 | El reloj es `AudioContext.currentTime` | `createScheduler({ clock: () => audio.currentTime })`. |
 | Ningún frame sale del dispositivo | No hay `fetch` de imagen; CSP `connect-src 'self'`. |
 | Sin licencia no hay audio | `startSession` no se llama sin licencia; `audio.init()` solo dentro de la sesión. |
+| La armonía nunca se rompe | `renderBar` solo emite pentatónica + notas del acorde; prueba exhaustiva de variaciones. |
+| La variación no corta el pulso | Se aplica en `column === 0`, leyendo el `intentTracker` ya confirmado. |
 | Polifonía por columna | `columnModel.active()` agrupa por columna y `handleStep` recorre todas las entradas. |
 
 ## 7. Rendimiento y memoria
@@ -207,8 +288,13 @@ video/canvas
 
 ## 9. Deuda y límites conocidos
 
+- **Kit real:** medido sobre metraje del kit. Los bloques se tocan y forman un solo blob, y la
+  madera del fondo se clasifica como `orange`; por eso la música se decide por **silueta** y no
+  por piezas. Separar piezas queda descartado (ver DECISIONS.md).
 - **Cámara real:** el camino `getUserMedia` no se validó en hardware dentro de este entorno; la
   lógica de visión sí está cubierta por pruebas sintéticas. Ver [QA.md](QA.md).
+- **Registro grave:** la marimba a `rate 0.5` (una octava abajo) suena apagada. Si el profesor
+  lo nota, conviene subir la melodía una octava o limitar el registro a medio/agudo.
 - **Latencia:** 20 fps + lookahead de 120 ms; el disparo puede adelantarse hasta 120 ms.
 - **Calibración con cámara:** depende del rAF; si la pestaña está oculta, el timeout se extiende
   pero no calibra hasta que vuelva a ser visible.

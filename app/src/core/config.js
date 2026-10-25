@@ -39,6 +39,10 @@ export const DEFAULTS = Object.freeze({
   showStats: false,
   /** Compensación de latencia cámara → audio, en milisegundos. */
   inputOffsetMs: 0,
+  /** Melodía guiada: la estructura varía la canción en vez de disparar notas sueltas. */
+  melody: true,
+  /** Acentos suaves al cruzar bloques, siempre dentro de la escala. */
+  accents: true,
   /** Reproducir un clic de referencia al iniciar cada barrido. */
   metronome: false,
   muted: false,

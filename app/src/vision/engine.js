@@ -8,6 +8,7 @@ import { createMorphology } from './morphology.js';
 import { createLabeler } from './components.js';
 import { createLayersExtractor, classifyShape } from './layers.js';
 import { createColumnModel } from './columns.js';
+import { createStructureExtractor } from './structure.js';
 import { estimateShift, shiftBackground } from './align.js';
 import { clamp } from '../core/util.js';
 
@@ -38,6 +39,7 @@ export function createVisionEngine({
   const labeler = createLabeler(width, height);
   const layersExtractor = createLayersExtractor(width, height);
   const columnModel = createColumnModel({ columns });
+  const structureExtractor = createStructureExtractor(width, height, columns);
 
   const pixels = width * height;
   const minArea = Math.max(24, Math.round(pixels * minAreaRatio));
@@ -95,10 +97,10 @@ export function createVisionEngine({
         calibration.resolve(true);
         calibration = null;
       }
-      return { blocks: [], stats: stats(0, 0), calibrating: true };
+      return { blocks: [], structure: null, stats: stats(0, 0), calibrating: true };
     }
 
-    if (!model.ready) return { blocks: [], stats: stats(0, 0) };
+    if (!model.ready) return { blocks: [], structure: null, stats: stats(0, 0) };
 
     if (pendingAlign) {
       pendingAlign = false;
@@ -110,6 +112,8 @@ export function createVisionEngine({
     maskProcessor.update(rgba, model, { sensitivity });
     morphology.openClose(maskProcessor.binary);
     const blobs = labeler.label(maskProcessor.binary, { minArea, maxArea });
+    // La silueta se mide sobre la máscara completa: no depende de separar piezas.
+    const structure = structureExtractor.measure(maskProcessor.binary, rgba);
 
     const detectedLayers = [];
     let blobCount = 0;
@@ -137,6 +141,7 @@ export function createVisionEngine({
 
     return {
       blocks: columnModel.blocks(now),
+      structure,
       stats: stats(blobCount, detectedLayers.length, blobs),
     };
   }
@@ -224,6 +229,7 @@ export function createVisionEngine({
 
   function setColumns(next) {
     columnModel.setColumns(next);
+    structureExtractor.setColumns(next);
   }
 
   function setFps(next) {
