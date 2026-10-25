@@ -57,7 +57,12 @@ tools/cloudflared.exe tunnel --url http://localhost:4173 --no-autoupdate --proto
 ```
 
 El enlace `trycloudflare.com` vive solo mientras sigan corriendo el servidor y el túnel; al
-cerrarlos deja de responder.
+cerrarlos deja de responder. Para un enlace estable hay un despliegue permanente en GitHub Pages:
+
+**https://rubendariogomeza.github.io/bloques-sonoros/**
+
+Se actualiza con cada push a `main` y no depende de ninguna computadora encendida. Detalles en
+[DEPLOY.md](docs/DEPLOY.md).
 
 ## Comandos
 
