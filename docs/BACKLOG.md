@@ -18,7 +18,7 @@
 | HU-09 Polifonía por apilamiento | ✅ | `columns.active()` + `handleStep`; prueba de torre de 3 colores y tope de 48 voces. Modo alternativo desde HU-12. |
 | HU-10 Mapeo de sonidos | ✅ | `ui/sheets.js` + `audio/engine.setMapping`; hoja verificada y persistencia en `mt.settings.v1`. |
 | HU-11 Monitoreo visual | ✅ | `ui/overlay.js`; verificado en simulador (barrido, cajas, destellos). Cámara real pendiente. |
-| HU-12 Melodía reactiva a la silueta | ✅ | `vision/structure.js`, `music/variation.js`, `music/song.js`, `audio/melody.js`; 12 pruebas (silueta, variación, armonía exhaustiva, reproductor). Verificado en navegador: 34–44 notas/8 s, 0 notas fuera de escala. |
+| HU-12 Melodía reactiva a la silueta | ✅ | `vision/structure.js`, `music/variation.js`, `music/song.js`, `audio/melody.js`; 14 pruebas (silueta, variación, armonía exhaustiva, reproductor, timbres). Verificado en navegador: 34–94 notas/8–12 s, 0 notas fuera de escala. Los timbres se cargan aparte del kit: la melodía suena también con el kit de percusión por defecto. |
 | HU-13 Montaje en pared con soporte 3D | 🟡 | Encuadre apaisado y rechazo de sombras (`vision/mask.js` + `test/vision-mask.test.js`). Falta validar con la pared y la luz del aula. |
 
 ## Detalle

@@ -64,6 +64,8 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | arriba suena agudo y abajo grave | altura → nota | HU-08/09 |
 | | los semitonos se convierten en factor de reproducción | transposición correcta | HU-08 |
 | | todos los kits cubren los 10 colores con samples existentes | ningún color mudo | HU-08/10 |
+| | la melodía carga sus timbres aunque el kit sea de percusión | la canción suena con el kit por defecto | HU-12 |
+| | cada timbre de la melodía tiene altura de referencia | afinación sin buffers por nota | HU-12 |
 | | sanitizeMapping rellena huecos y descarta ids inválidos | ajustes corruptos no rompen el audio | HU-10 |
 | `audio-melody.test.js` | afina con playbackRate sobre la nota real del sample | melodía sin un buffer por nota | HU-12 |
 | | solo los samples con altura definida sirven de acento | percusión no desafina | HU-12 |
