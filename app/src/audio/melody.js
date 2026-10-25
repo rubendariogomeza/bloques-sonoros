@@ -16,6 +16,12 @@ const TIMBRES = Object.freeze([
   Object.freeze({ lead: 'pluck', harmony: 'bell' }),
 ]);
 
+/**
+ * Samples que la melodía usa siempre, aunque el kit elegido sea de percusión.
+ * El kit define el modo bloque → sonido; la melodía guiada tiene su propia paleta.
+ */
+export const MELODY_SAMPLE_IDS = Object.freeze(['marimba', 'bell', 'pluck', 'bass', 'chime']);
+
 /** Do6: referencia del acento cuando el sample no tiene altura definida. */
 const ACCENT_BASE = 84;
 /** Seis grados pentatónicos: una octava de recorrido, tasa de reproducción 1–2×. */

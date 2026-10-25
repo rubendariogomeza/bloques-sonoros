@@ -69,7 +69,7 @@ Se actualiza con cada push a `main` y no depende de ninguna computadora encendid
 | Comando | Para qué |
 | --- | --- |
 | `npm start` | App + API de licencias en `http://localhost:4173`. |
-| `npm test` | Suite completa (`node --test`, 91 pruebas). |
+| `npm test` | Suite completa (`node --test`, 93 pruebas). |
 | `npm run tokens -- --count 25 --label lote-septiembre` | Genera códigos de un solo uso. |
 | `npm run tokens -- --count 5 --out server/data/lote.txt` | Los guarda en un archivo para imprimir. |
 

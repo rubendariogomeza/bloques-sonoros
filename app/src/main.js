@@ -14,7 +14,7 @@ import { createVisionEngine } from './vision/engine.js';
 import { createTransport } from './sequencer/transport.js';
 import { createScheduler, LOOKAHEAD_BACKGROUND, LOOKAHEAD_FOREGROUND } from './sequencer/scheduler.js';
 import { createAudioEngine } from './audio/engine.js';
-import { createMelodyPlayer } from './audio/melody.js';
+import { createMelodyPlayer, MELODY_SAMPLE_IDS } from './audio/melody.js';
 import { BASE_INTENT, createIntentTracker, describeIntent } from './music/variation.js';
 import { KITS, KIT_IDS, getKit, defaultMapping, sampleLabel } from './audio/kits.js';
 import { createOverlay } from './ui/overlay.js';
@@ -142,7 +142,7 @@ async function startSession(mode = 'camera') {
     await audio.init();
     await audio.loadKit(settings.kitId, (done, total) => {
       loading.setDetail(`Cargando sonidos… ${done}/${total}`);
-    });
+    }, { extraIds: melodySampleIds() });
   } catch (error) {
     source.stop?.();
     const message = error?.message ?? 'No pudimos iniciar el audio.';
@@ -471,10 +471,22 @@ function setMetronome(value) {
 }
 
 function setMelody(value) {
-  settings.melody = Boolean(value);
+  const next = Boolean(value);
+  settings.melody = next;
   melody.reset();
   saveSettings();
   updateChrome();
+  // Al activar la melodía hay que asegurar sus timbres aunque el kit sea de percusión.
+  if (next && session) {
+    audio.loadKit(settings.kitId, null, { extraIds: MELODY_SAMPLE_IDS }).catch(() => {
+      hud.notify('No pudimos cargar los sonidos de la melodía.', { kind: 'error' });
+    });
+  }
+}
+
+/** Samples extra que necesita la melodía guiada, además del kit elegido. */
+function melodySampleIds() {
+  return settings.melody ? MELODY_SAMPLE_IDS : [];
 }
 
 function setAccents(value) {
@@ -498,7 +510,7 @@ function toggleMute() {
 async function changeKit(kitId) {
   if (!KIT_IDS.includes(kitId) || kitId === settings.kitId) return;
   try {
-    await audio.loadKit(kitId);
+    await audio.loadKit(kitId, null, { extraIds: melodySampleIds() });
     audio.setMapping(mappingFor(kitId));
     settings.kitId = kitId;
     saveSettings();

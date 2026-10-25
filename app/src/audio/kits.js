@@ -72,8 +72,8 @@ export function getKit(kitId) {
   return KITS.find((kit) => kit.id === kitId) ?? KITS[0];
 }
 
-export function kitSampleIds(kit = KITS[0]) {
-  return [...new Set(Object.values(kit.mapping))];
+export function kitSampleIds(kit = KITS[0], extraIds = []) {
+  return [...new Set([...Object.values(kit.mapping), ...extraIds])];
 }
 
 export function kitScale(kit) {

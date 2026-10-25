@@ -7,7 +7,7 @@
  */
 // Súbelo en cada despliegue: la estrategia es cache-first con revalidación, así
 // que la primera carga tras publicar sirve la versión anterior y la actualiza detrás.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `bloques-shell-${VERSION}`;
 
 const SHELL = [

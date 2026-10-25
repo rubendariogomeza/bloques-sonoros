@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { SCALES, xToColumn, columnCenter, yToDegree, yToSemitones, semitonesToRate } from '../app/src/sequencer/pattern.js';
 import { COLOR_CLASSES } from '../app/src/core/config.js';
 import { KITS, defaultMapping, sanitizeMapping, kitSampleIds } from '../app/src/audio/kits.js';
-import { SAMPLE_IDS } from '../app/src/audio/synth.js';
+import { SAMPLE_IDS, SAMPLE_BASE_MIDI } from '../app/src/audio/synth.js';
+import { MELODY_SAMPLE_IDS } from '../app/src/audio/melody.js';
 
 test('x normalizado cae siempre en una columna válida', () => {
   assert.equal(xToColumn(0, 16), 0);
@@ -48,4 +49,23 @@ test('sanitizeMapping rellena huecos y descarta ids inválidos', () => {
   assert.equal(mapping.blue, 'cowbell');
   assert.deepEqual(Object.keys(mapping).sort(), [...COLOR_CLASSES].sort());
   assert.deepEqual(defaultMapping('melodic'), KITS[1].mapping);
+});
+
+test('la melodía carga sus timbres aunque el kit sea de percusión', () => {
+  const percussion = KITS.find((kit) => kit.mode === 'percussion');
+  // El kit por defecto no trae la paleta melódica: sin extras la melodía sería muda.
+  assert.ok(!kitSampleIds(percussion).includes('marimba'));
+
+  const ids = kitSampleIds(percussion, MELODY_SAMPLE_IDS);
+  for (const id of MELODY_SAMPLE_IDS) {
+    assert.ok(ids.includes(id), `la melodía necesita ${id}`);
+  }
+  for (const id of ids) assert.ok(SAMPLE_IDS.includes(id), `${id} no existe en el sintetizador`);
+});
+
+test('cada timbre de la melodía tiene altura de referencia', () => {
+  for (const id of MELODY_SAMPLE_IDS) {
+    assert.ok(SAMPLE_IDS.includes(id), `${id} no existe`);
+    assert.equal(typeof SAMPLE_BASE_MIDI[id], 'number', `${id} no se puede afinar`);
+  }
 });

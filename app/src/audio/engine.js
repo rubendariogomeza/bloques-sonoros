@@ -52,12 +52,12 @@ export function createAudioEngine({ renderer = renderSample } = {}) {
     return context;
   }
 
-  /** Renderiza en paralelo los samples que falten. */
-  async function loadKit(nextKitId, onProgress) {
+  /** Renderiza en paralelo los samples que falten (kit + extras de la melodía). */
+  async function loadKit(nextKitId, onProgress, { extraIds = [] } = {}) {
     assertAlive();
     const ctx = await init();
     const next = getKit(nextKitId);
-    const ids = kitSampleIds(next);
+    const ids = kitSampleIds(next, extraIds);
     let done = 0;
     const missing = ids.filter((id) => !buffers.has(id));
     await Promise.all(
