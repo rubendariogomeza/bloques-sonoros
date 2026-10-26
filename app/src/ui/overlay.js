@@ -42,9 +42,10 @@ export function createOverlay(canvas) {
     return true;
   }
 
-  function drawGrid(columns, activeColumn) {
+  function drawGrid(columns, rows, activeColumn, showRows) {
     const { width, height } = view;
     const columnWidth = width / columns;
+    const rowHeight = height / rows;
     ctx.save();
     // Banda de la columna que está sonando.
     if (activeColumn >= 0) {
@@ -58,15 +59,51 @@ export function createOverlay(canvas) {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 10]);
+    const top = showRows ? 0 : height * 0.14;
+    const bottom = showRows ? height : height * 0.94;
     for (let i = 1; i < columns; i += 1) {
       const x = Math.round(i * columnWidth) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(x, height * 0.14);
-      ctx.lineTo(x, height * 0.94);
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
       ctx.stroke();
+    }
+    if (showRows) {
+      // La parrilla completa: cada fila es un grado pentatónico.
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+      for (let r = 1; r < rows; r += 1) {
+        const y = Math.round(r * rowHeight) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
     }
     ctx.setLineDash([]);
     ctx.restore();
+  }
+
+  /** Cuadros activos teñidos con su color: lo que se ve es lo que suena. */
+  function drawCells(grid) {
+    if (!grid) return;
+    const { width, height } = view;
+    const cellWidth = width / grid.columns;
+    const cellHeight = height / grid.rows;
+    for (const cell of grid.active) {
+      const color = COLOR_HEX[cell.color] ?? '#ffd166';
+      const x = cell.column * cellWidth;
+      const y = cell.row * cellHeight;
+      ctx.save();
+      ctx.fillStyle = hexToRgba(color, 0.2);
+      ctx.strokeStyle = hexToRgba(color, 0.82);
+      ctx.lineWidth = 2;
+      ctx.shadowColor = hexToRgba(color, 0.45);
+      ctx.shadowBlur = 12;
+      roundRect(ctx, x + 2, y + 2, cellWidth - 4, cellHeight - 4, Math.min(10, cellWidth * 0.2));
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   function drawSweep(progress) {
@@ -152,11 +189,24 @@ export function createOverlay(canvas) {
   }
 
   /**
-   * @param {{source?:any, progress:number, columns:number, blocks:Array, flashes:Array,
-   *          calibrated:boolean, running:boolean, now:number}} frame
+   * @param {{source?:any, progress:number, columns:number, rows:number, blocks:Array,
+   *          flashes:Array, grid?:any, playMode?:string, calibrated:boolean,
+   *          running:boolean, now:number}} frame
    */
   function draw(frame) {
-    const { source, progress = 0, columns = 16, blocks = [], flashes = [], calibrated = true, running = true, now = 0 } = frame;
+    const {
+      source,
+      progress = 0,
+      columns = 16,
+      rows = 8,
+      blocks = [],
+      flashes = [],
+      grid = null,
+      playMode = 'grid',
+      calibrated = true,
+      running = true,
+      now = 0,
+    } = frame;
     ctx.fillStyle = '#06050b';
     ctx.fillRect(0, 0, view.width, view.height);
     const hasFrame = source ? drawCover(source) : false;
@@ -166,12 +216,14 @@ export function createOverlay(canvas) {
       return;
     }
 
-    drawGrid(columns, running ? Math.floor(progress * columns) % columns : -1);
+    const gridMode = playMode === 'grid';
+    drawGrid(columns, rows, running ? Math.floor(progress * columns) % columns : -1, gridMode);
     if (!calibrated) {
       ctx.fillStyle = 'rgba(6, 5, 11, 0.42)';
       ctx.fillRect(0, 0, view.width, view.height);
     }
-    drawBlocks(blocks, columns);
+    if (gridMode) drawCells(grid);
+    else drawBlocks(blocks, columns);
     if (running) drawSweep(progress);
     if (!reducedMotion) drawFlashes(flashes, columns, now);
     drawVignette();

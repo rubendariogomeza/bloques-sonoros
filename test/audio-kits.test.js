@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SCALES, xToColumn, columnCenter, yToDegree, yToSemitones, semitonesToRate } from '../app/src/sequencer/pattern.js';
 import { COLOR_CLASSES } from '../app/src/core/config.js';
-import { KITS, defaultMapping, sanitizeMapping, kitSampleIds } from '../app/src/audio/kits.js';
+import { KITS, defaultMapping, sanitizeMapping, kitSampleIds, GRID_KIT, GRID_KIT_ID, PITCHED_SAMPLE_IDS, isPitchedSample, sanitizePitchedMapping } from '../app/src/audio/kits.js';
 import { SAMPLE_IDS, SAMPLE_BASE_MIDI } from '../app/src/audio/synth.js';
 import { MELODY_SAMPLE_IDS } from '../app/src/audio/melody.js';
 
@@ -48,7 +48,7 @@ test('sanitizeMapping rellena huecos y descarta ids inválidos', () => {
   assert.equal(mapping.red, kit.mapping.red);
   assert.equal(mapping.blue, 'cowbell');
   assert.deepEqual(Object.keys(mapping).sort(), [...COLOR_CLASSES].sort());
-  assert.deepEqual(defaultMapping('melodic'), KITS[1].mapping);
+  assert.deepEqual(defaultMapping('melodic'), KITS.find((kit) => kit.id === 'melodic').mapping);
 });
 
 test('la melodía carga sus timbres aunque el kit sea de percusión', () => {
@@ -68,4 +68,27 @@ test('cada timbre de la melodía tiene altura de referencia', () => {
     assert.ok(SAMPLE_IDS.includes(id), `${id} no existe`);
     assert.equal(typeof SAMPLE_BASE_MIDI[id], 'number', `${id} no se puede afinar`);
   }
+});
+
+test('el kit de la parrilla solo usa instrumentos afinados', () => {
+  assert.equal(GRID_KIT.id, GRID_KIT_ID);
+  assert.equal(GRID_KIT.mode, 'melodic');
+  for (const color of COLOR_CLASSES) {
+    const sampleId = GRID_KIT.mapping[color];
+    assert.ok(isPitchedSample(sampleId), `${color} → ${sampleId} no tiene altura`);
+    assert.ok(PITCHED_SAMPLE_IDS.includes(sampleId));
+  }
+  // El kit cubre toda la paleta afinada sin repetir instrumento.
+  assert.deepEqual(new Set(kitSampleIds(GRID_KIT)), new Set(PITCHED_SAMPLE_IDS));
+});
+
+test('sanitizePitchedMapping descarta percusión y rellena huecos', () => {
+  const mapping = sanitizePitchedMapping({ red: 'kick', blue: 'cello', green: 'no-existe' });
+  assert.equal(mapping.red, GRID_KIT.mapping.red);
+  assert.equal(mapping.blue, 'cello');
+  assert.equal(mapping.green, GRID_KIT.mapping.green);
+  assert.deepEqual(Object.keys(mapping).sort(), [...COLOR_CLASSES].sort());
+  for (const color of COLOR_CLASSES) assert.ok(isPitchedSample(mapping[color]));
+  assert.deepEqual(sanitizePitchedMapping(), { ...GRID_KIT.mapping });
+  assert.deepEqual(defaultMapping(GRID_KIT_ID), { ...GRID_KIT.mapping });
 });

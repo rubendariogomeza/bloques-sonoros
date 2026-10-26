@@ -43,11 +43,12 @@ Abrir la URL
                ▼
         SESIÓN EN VIVO
          ├─ Calibrar (pared vacía) → banner de confirmación
-         ├─ Construir con bloques → la línea barre y suena la melodía
-         ├─ La forma de la estructura cambia la variación en el compás siguiente
+         ├─ Construir con bloques → la línea barre y cada cuadro suena
+         │    (parrilla: color = instrumento, fila = nota; pared vacía = silencio)
+         ├─ En modo melodía, la forma de la estructura cambia la variación en el compás siguiente
          ├─ ⟳ Recalibrar rápido (sin cortar la música)
-         ├─ Sonidos → kit + color → sample (modo bloque → sonido)
-         ├─ Ajustes → rejilla, sensibilidad, latencia, volumen, melodía, acentos
+         ├─ Sonidos → kit + color → sample (o instrumentos afinados en parrilla)
+         ├─ Ajustes → modo de juego, rejilla, sensibilidad, latencia, volumen, acentos
          └─ Desactivar este kit → vuelve al bloqueo
 ```
 
@@ -100,10 +101,10 @@ El botón primario se deshabilita mientras arranca y muestra “Preparando…”
 ### 4.4 Sesión en vivo (`live`)
 
 - **Escena:** video a pantalla completa (o mesa sintética) con la línea de barrido.
-- **HUD superior:** marca, estado, BPM, número de bloques, **variación vigente**, FPS opcional y
-  fuente (`Cámara`/`Virtual`).
+- **HUD superior:** marca, estado, BPM, número de celdas o bloques, **variación vigente**, FPS
+  opcional y fuente (`Cámara`/`Virtual`). En parrilla el contador dice «Celdas».
 - **Chip de variación:** texto corto que describe lo que está sonando ahora mismo
-  (`Melodía base`, `marimba · agudo · corcheas · bajo`). Solo aparece con la melodía guiada activa.
+  (`Melodía base`, `marimba · agudo · corcheas · bajo`). Solo aparece en el modo melodía.
 - **Dock inferior:** reproducción, tempo, calibrar, recalibrar, sonidos, ajustes y silencio.
 - **Banner contextual:** aparece bajo el HUD; en errores no se autocierra.
 - **Toasts:** confirmaciones breves (1,2–4,2 s) en la esquina inferior, `role="status"`.
@@ -118,11 +119,13 @@ Estados del chip:
 | En vivo | El scheduler está corriendo | Verde |
 | En pausa | Hay fondo pero el transporte está detenido | Ámbar |
 
-### 4.5 Hoja **Sonidos** (HU-10)
+### 4.5 Hoja **Sonidos** (HU-10/HU-14)
 
-- Título “Sonidos de los bloques”, cierre ✕ y **Listo**.
-- **Kit:** tres tarjetas (nombre + descripción) con `aria-pressed`.
-- **Color → sonido:** una fila por color con muestra, nombre y `select` de 18 samples.
+- Título “Sonidos de los bloques” o “Sonidos de la parrilla” según el modo.
+- **Kit:** tres tarjetas (nombre + descripción) con `aria-pressed`. En parrilla no hay tarjetas:
+  el kit es fijo y afinado.
+- **Color → sonido:** una fila por color con muestra, nombre y `select` de 18 samples. En parrilla
+  el `select` solo ofrece los 10 instrumentos con altura definida.
 - Ayuda: “En los kits melódicos, la altura del bloque también elige la nota.”
 - **Restablecer kit** vuelve al mapeo por defecto.
 - Cada cambio se aplica al instante y se confirma con un toast; se persiste con debounce.
@@ -131,13 +134,13 @@ Estados del chip:
 
 | Control | Rango | Ayuda |
 | --- | --- | --- |
+| Modo de juego | Parrilla / Melodía / Bloques | “Parrilla: cada cuadro suena con el instrumento de su color; pared vacía, silencio. Melodía: la forma de la estructura cambia la canción. Bloques: cada color dispara su sonido.” |
 | Rejilla del compás | 8 / 12 / 16 / 24 | “8 es más fácil de leer; 24 da más detalle.” |
 | Sensibilidad | 0–100 % | Subir si los bloques claros no se ven; bajar si hay sombras que suenan |
 | Compensación de cámara | 0–300 ms | Alinea lo que se ve con lo que suena |
 | Volumen | 0–100 % | — |
 | Clic de referencia | Sí/No | Pulso al inicio de cada barrido |
-| Melodía guiada | Sí/No | La forma de los bloques cambia la canción sin romper la armonía. Desactivado: modo bloque → sonido. |
-| Acentos de los bloques | Sí/No | Un toque suave al cruzar un bloque, siempre dentro de la escala |
+| Acentos de los bloques | Sí/No | Solo en melodía: un toque suave al cruzar un bloque, siempre dentro de la escala |
 | Mostrar rendimiento | Sí/No | FPS y ms por frame |
 | Fuente de video | Cámara / Bloques virtuales | La cámara se deshabilita en demo |
 | Calibración | **Calibrar con la pared vacía**, **Recalibrar rápido** | La rápida no detiene la música |
@@ -151,10 +154,11 @@ Cuatro pasos numerados: colocar el móvil en el soporte frente a la pared, calib
 vacía, construir con los bloques y recalibrar si la cámara se mueve. Cierre **Entendido**. Se abre
 desde Ajustes para no añadir ruido al dock.
 
-### 4.8 Cómo cambia la música (HU-12)
+### 4.8 Cómo cambia la música en modo melodía (HU-12)
 
 La app no asigna una nota a cada bloque: siempre suena una melodía infantil en Do, y la **forma**
 de la construcción la varía. Esto evita el caos con muchas piezas y garantiza que nada desafine.
+Este comportamiento es el del modo **Melodía**; en **Parrilla** cada cuadro sí tiene su nota.
 
 | Lo que hace el niño | Lo que se oye |
 | --- | --- |
@@ -166,18 +170,37 @@ de la construcción la varía. Esto evita el caos con muchas piezas y garantiza 
 
 - El cambio se aplica **al empezar el compás**, no a mitad de nota.
 - Solo se confirma si la forma se mantiene **0,9 s**; mover un bloque no reescribe la canción.
-- El chip del HUD dice qué está sonando; si el profesor desactiva **Melodía guiada**, vuelve el
+- El chip del HUD dice qué está sonando; si el profesor cambia a **Bloques**, vuelve el
   modo bloque → sonido clásico.
+
+### 4.9 Parrilla (HU-14, modo por defecto)
+
+La escena se divide en **8 filas** invisibles; cada columna del compás es un paso. El niño coloca
+un bloque y, al pasar la línea, suena el instrumento de su color en la nota de su fila.
+
+| Lo que hace el niño | Lo que se oye |
+| --- | --- |
+| No deja nada en la pared | Silencio total: ninguna celda activa |
+| Pone un bloque rojo | El timbre del rojo, en la nota de esa fila |
+| Lo sube o lo baja | El mismo timbre, más agudo o más grave, sin salir de la escala |
+| Apila dos colores | Los dos instrumentos a la vez |
+| Pone un bloque a caballo entre dos filas | Una sola nota (la fila con más ocupación) |
+
+- Las celdas ocupadas se tiñen con su color y el HUD cuenta **Celdas**.
+- La fila 0 (arriba) es la más aguda; la 7 (abajo), la más grave. La escalera se centra en la nota
+  natural de cada instrumento, así el bajo nunca suena chillón ni la campana grave.
+- Cualquier combinación cae en la pentatónica de Do: no hay forma de desafinar.
+- El profesor puede reasignar color → instrumento en **Sonidos**, pero solo entre timbres afinados.
 
 ## 5. Anatomía de la escena
 
 ```
 ┌──────────────────────────────────────────────┐
-│ HUD: marca · estado · BPM · bloques · variación  │  ← chips translúcidos
+│ HUD: marca · estado · BPM · celdas · variación   │  ← chips translúcidos
 │                                              │
 │   ┊        ┊        ┊        ┊        ┊      │  ← rejilla de columnas (punteada)
 │   ┊   ▢    ┊        ┊   ▢    ┊        ┊      │  ← cajas de detección por color
-│   ┊        ┊        ┊   ▢    ┊        ┊      │
+│   ┊        ┊        ┊   ▢    ┊        ┊      │  ← celdas teñidas + filas (parrilla)
 │   ┊        ┊   ████████████████     ┊      │  ← banda de la columna activa
 │   ┊        ┊        ┊   ┃        ┊        ┊  │  ← línea de barrido + estela
 │                                              │
@@ -186,6 +209,8 @@ de la construcción la varía. Esto evita el caos con muchas piezas y garantiza 
 ```
 
 - La rejilla va del 14 % al 94 % de la altura para no chocar con HUD ni dock.
+- En **Parrilla** se añaden 8 filas tenues: las celdas ocupadas se tiñen con su color y las que
+  van a sonar se marcan con un contorno; el HUD cuenta «Celdas».
 - La línea de barrido es ámbar (`--accent`), 2,5 px, con estela de 180 px y un punto brillante.
 - La columna que suena se ilumina con una banda cálida translúcida.
 - Cada bloque detectado se dibuja con el color real del kit y un halo suave.

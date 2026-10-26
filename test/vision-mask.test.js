@@ -75,3 +75,33 @@ test('un cambio global de luz se compensa con el factor de luz', () => {
   mask.update(brighter, model, { sensitivity: 0.5 });
   assert.equal(mask.binary[0], 0);
 });
+
+test('un bloque rojo sobre una mesa de madera no se confunde con el fondo', () => {
+  const WOOD = [197, 115, 88];
+  const model = createBackgroundModel(1, 1);
+  model.beginCalibration();
+  model.addCalibrationFrame(frame(WOOD));
+  model.commitCalibration();
+  const mask = createMaskProcessor(1, 1);
+
+  // Rojo saturado con un brillo parecido al de la madera: la saturación lo separa.
+  mask.update(frame([239, 68, 68]), model, { sensitivity: 0.5 });
+  mask.update(frame([239, 68, 68]), model, { sensitivity: 0.5 });
+
+  assert.equal(mask.binary[0], 1);
+});
+
+test('la sombra de un bloque sobre madera sigue sin ser un bloque', () => {
+  const WOOD = [197, 115, 88];
+  const model = createBackgroundModel(1, 1);
+  model.beginCalibration();
+  model.addCalibrationFrame(frame(WOOD));
+  model.commitCalibration();
+  const mask = createMaskProcessor(1, 1);
+  const shadow = WOOD.map((value) => Math.round(value * 0.6));
+
+  mask.update(frame(shadow), model, { sensitivity: 0.5 });
+  mask.update(frame(shadow), model, { sensitivity: 0.5 });
+
+  assert.equal(mask.binary[0], 0);
+});

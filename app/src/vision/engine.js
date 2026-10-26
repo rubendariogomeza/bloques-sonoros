@@ -9,7 +9,9 @@ import { createLabeler } from './components.js';
 import { createLayersExtractor, classifyShape } from './layers.js';
 import { createColumnModel } from './columns.js';
 import { createStructureExtractor } from './structure.js';
+import { createGridExtractor } from './grid.js';
 import { estimateShift, shiftBackground } from './align.js';
+import { GRID_ROWS } from '../core/config.js';
 import { clamp } from '../core/util.js';
 
 const MAX_BLOBS_PER_FRAME = 16;
@@ -24,9 +26,13 @@ export function createVisionEngine({
   width = 320,
   height = 240,
   columns = 16,
+  rows = GRID_ROWS,
   sensitivity = 0.5,
   fps = 20,
   minAreaRatio = 0.0012,
+  trackBlobs = true,
+  trackStructure = true,
+  trackGrid = true,
 } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -40,6 +46,7 @@ export function createVisionEngine({
   const layersExtractor = createLayersExtractor(width, height);
   const columnModel = createColumnModel({ columns });
   const structureExtractor = createStructureExtractor(width, height, columns);
+  const gridExtractor = createGridExtractor(width, height, { columns, rows });
 
   const pixels = width * height;
   const minArea = Math.max(24, Math.round(pixels * minAreaRatio));
@@ -53,6 +60,12 @@ export function createVisionEngine({
   let frameMs = 0;
   let measuredFps = 0;
   let started = false;
+  // Aspecto visible del escenario: el recorte debe ser el mismo que pinta el
+  // overlay para que la parrilla caiga exactamente sobre lo que ve el profesor.
+  let viewAspect = width / height;
+  let blobsEnabled = Boolean(trackBlobs);
+  let structureEnabled = Boolean(trackStructure);
+  let gridEnabled = Boolean(trackGrid);
 
   function drawFrame() {
     const element = resolveElement(source);
@@ -61,8 +74,9 @@ export function createVisionEngine({
     const sh = element.videoHeight || element.naturalHeight || element.height || 0;
     if (!sw || !sh) return false;
 
-    // Recorte central tipo "cover": mantiene proporciones reales de los bloques.
-    const targetAspect = width / height;
+    // Recorte central tipo "cover": el mismo que pinta el overlay, así la
+    // parrilla y las columnas coinciden con lo que se ve en pantalla.
+    const targetAspect = viewAspect;
     const sourceAspect = sw / sh;
     let cw = sw;
     let ch = sh;
@@ -94,13 +108,14 @@ export function createVisionEngine({
         model.commitCalibration();
         maskProcessor.reset();
         columnModel.clear();
+        gridExtractor.reset();
         calibration.resolve(true);
         calibration = null;
       }
-      return { blocks: [], structure: null, stats: stats(0, 0), calibrating: true };
+      return { blocks: [], structure: null, grid: null, stats: stats(0, 0), calibrating: true };
     }
 
-    if (!model.ready) return { blocks: [], structure: null, stats: stats(0, 0) };
+    if (!model.ready) return { blocks: [], structure: null, grid: null, stats: stats(0, 0) };
 
     if (pendingAlign) {
       pendingAlign = false;
@@ -111,37 +126,42 @@ export function createVisionEngine({
 
     maskProcessor.update(rgba, model, { sensitivity });
     morphology.openClose(maskProcessor.binary);
-    const blobs = labeler.label(maskProcessor.binary, { minArea, maxArea });
-    // La silueta se mide sobre la máscara completa: no depende de separar piezas.
-    const structure = structureExtractor.measure(maskProcessor.binary, rgba);
+    // La parrilla se mide sobre la máscara completa: cuadro ocupado = hay algo.
+    const grid = gridEnabled ? gridExtractor.measure(maskProcessor.binary, rgba, now) : null;
+    const structure = structureEnabled ? structureExtractor.measure(maskProcessor.binary, rgba) : null;
 
+    let blobs = [];
     const detectedLayers = [];
     let blobCount = 0;
-    for (const blob of blobs) {
-      if (blobCount >= MAX_BLOBS_PER_FRAME) break;
-      if (blob.fill < 0.22) continue;
-      blobCount += 1;
-      const shape = classifyShape(blob);
-      const layers = layersExtractor.extract({ rgba, binary: maskProcessor.binary, blob });
-      for (const layer of layers) {
-        detectedLayers.push({
-          column: clamp(Math.floor((blob.cx / width) * columnModel.columns), 0, columnModel.columns - 1),
-          color: layer.color,
-          y: layer.y,
-          shape,
-          confidence: layer.confidence,
-        });
+    if (blobsEnabled) {
+      blobs = labeler.label(maskProcessor.binary, { minArea, maxArea });
+      for (const blob of blobs) {
+        if (blobCount >= MAX_BLOBS_PER_FRAME) break;
+        if (blob.fill < 0.22) continue;
+        blobCount += 1;
+        const shape = classifyShape(blob);
+        const layers = layersExtractor.extract({ rgba, binary: maskProcessor.binary, blob });
+        for (const layer of layers) {
+          detectedLayers.push({
+            column: clamp(Math.floor((blob.cx / width) * columnModel.columns), 0, columnModel.columns - 1),
+            color: layer.color,
+            y: layer.y,
+            shape,
+            confidence: layer.confidence,
+          });
+        }
       }
+      columnModel.observe(detectedLayers, now);
     }
 
-    columnModel.observe(detectedLayers, now);
     model.adapt(rgba, maskProcessor.soft);
 
     frameMs = frameMs * 0.8 + (performance.now() - startedAt) * 0.2;
 
     return {
-      blocks: columnModel.blocks(now),
+      blocks: blobsEnabled ? columnModel.blocks(now) : [],
       structure,
+      grid,
       stats: stats(blobCount, detectedLayers.length, blobs),
     };
   }
@@ -213,6 +233,7 @@ export function createVisionEngine({
     model.commitCalibration();
     maskProcessor.reset();
     columnModel.clear();
+    gridExtractor.reset();
     return true;
   }
 
@@ -230,6 +251,25 @@ export function createVisionEngine({
   function setColumns(next) {
     columnModel.setColumns(next);
     structureExtractor.setColumns(next);
+    gridExtractor.setColumns(next);
+  }
+
+  /** Activa solo los analizadores que el modo de juego necesita. */
+  function setTrackers({ blobs, structure, grid } = {}) {
+    if (blobs != null && Boolean(blobs) !== blobsEnabled) {
+      blobsEnabled = Boolean(blobs);
+      if (!blobsEnabled) columnModel.clear();
+    }
+    if (structure != null) structureEnabled = Boolean(structure);
+    if (grid != null) {
+      gridEnabled = Boolean(grid);
+      if (!gridEnabled) gridExtractor.reset();
+    }
+  }
+
+  /** Aspecto del escenario visible; define el recorte que se procesa. */
+  function setViewAspect(value) {
+    if (Number.isFinite(value) && value > 0.1 && value < 10) viewAspect = value;
   }
 
   function setFps(next) {
@@ -248,6 +288,7 @@ export function createVisionEngine({
     stop();
     calibration = null;
     columnModel.clear();
+    gridExtractor.reset();
   }
 
   return {
@@ -260,6 +301,8 @@ export function createVisionEngine({
     recalibrateFast,
     setSensitivity,
     setColumns,
+    setTrackers,
+    setViewAspect,
     setFps,
     dispose,
     get columns() {

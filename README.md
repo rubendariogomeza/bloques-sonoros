@@ -1,12 +1,15 @@
 # Bloques Sonoros · Secuenciador musical tangible
 
 PWA educativa en la que los bloques físicos colocados sobre una pared se convierten en música.
-La cámara mide la **forma** de la construcción, una línea de lectura barre el área de izquierda a
-derecha y la silueta elige una variación de una melodía infantil continua. La armonía nunca se
-rompe: cualquier construcción suena bien. Todo el video y el audio se procesan en el navegador:
-**ningún frame sale del dispositivo**.
+La escena se divide en una **parrilla de 8 filas**: una línea de lectura barre el área de
+izquierda a derecha y, al cruzar cada bloque, suena el instrumento de su color en la nota de su
+fila. Una pared vacía es silencio total y cualquier combinación cae en la pentatónica de Do, así
+que el niño compone sin poder desafinar. La melodía reactiva a la forma de la estructura y el
+modo bloque → sonido siguen disponibles como alternativas. Todo el video y el audio se procesan
+en el navegador: **ningún frame sale del dispositivo**.
 
-- **Profesor:** calibra el fondo, elige kit de sonidos, ajusta BPM, sensibilidad y volumen.
+- **Profesor:** calibra el fondo, elige modo de juego y kit de sonidos, ajusta BPM, sensibilidad
+  y volumen.
 - **Alumnos:** construyen y apilan bloques. El único feedback es el sonido.
 - **Acceso:** código QR de un solo uso impreso en el manual del kit físico; se canjea una vez
   contra el servidor y queda activo en el dispositivo para siempre (incluso sin internet).
@@ -34,8 +37,9 @@ Escríbelo o escanéalo en la pantalla de bloqueo. Si prefieres no gastar un có
 2. O pulsa **Empezar con bloques virtuales** en el onboarding tras activar un kit.
 
 El simulador dibuja una pared con bloques y atraviesa exactamente el mismo pipeline de visión que
-la cámara (fondo, máscara, morfología, silueta, blobs, capas, columnas). Al mover los bloques, la
-melodía cambia de registro, densidad o instrumento en el compás siguiente.
+la cámara (fondo, máscara, morfología, parrilla, silueta, blobs, capas, columnas). Al mover los
+bloques, cada cuadro suena con su instrumento y su nota; en modo melodía, la forma cambia el
+registro, la densidad o el instrumento en el compás siguiente.
 
 ## Modo prueba (sin QR)
 
@@ -69,7 +73,7 @@ Se actualiza con cada push a `main` y no depende de ninguna computadora encendid
 | Comando | Para qué |
 | --- | --- |
 | `npm start` | App + API de licencias en `http://localhost:4173`. |
-| `npm test` | Suite completa (`node --test`, 93 pruebas). |
+| `npm test` | Suite completa (`node --test`, 113 pruebas). |
 | `npm run tokens -- --count 25 --label lote-septiembre` | Genera códigos de un solo uso. |
 | `npm run tokens -- --count 5 --out server/data/lote.txt` | Los guarda en un archivo para imprimir. |
 
@@ -87,11 +91,12 @@ Variables de entorno del servidor:
 2. **Inicia sesión musical**: un toque que pide cámara y audio. Sin ese gesto el navegador no
    deja arrancar el motor de audio.
 3. **Calibra** con la pared vacía. La app aprende el fondo.
-4. Construye con bloques. La línea de barrido recorre el área y suena la melodía; la forma de la
-   estructura cambia la variación en el compás siguiente (el chip del HUD dice cuál).
+4. Construye con bloques. La línea de barrido recorre el área: cada bloque suena con el
+   instrumento de su color y la nota de su fila (modo **Parrilla**, el de fábrica). En **Melodía**,
+   la forma de la estructura cambia la variación en el compás siguiente (el chip del HUD dice cuál).
 5. Si la cámara se mueve, **⟳ Recalibrar rápido** compensa el desplazamiento sin parar la música.
-6. **Sonidos** reasigna color → sample; **Ajustes** cambia rejilla (8/12/16/24), sensibilidad,
-   latencia, volumen, metrónomo, melodía guiada, acentos y fuente de video.
+6. **Sonidos** reasigna color → sample (en parrilla, solo instrumentos afinados); **Ajustes** cambia
+   modo de juego, rejilla (8/12/16/24), sensibilidad, latencia, volumen, metrónomo y acentos.
 
 ## Estructura
 
@@ -104,9 +109,9 @@ app/                 PWA estática (ES modules nativos, sin build)
   src/core/          config y utilidades puras
   src/platform/      localStorage
   src/auth/          token, API, licencia, escáner QR
-  src/vision/        cámara → máscara → silueta → blobs → capas → columnas
+  src/vision/        cámara → máscara → parrilla/silueta → blobs → capas → columnas
   src/sequencer/     transporte (matemática pura) + scheduler (lookahead)
-  src/music/         canción pentatónica + silueta → variación armónica
+  src/music/         canción pentatónica, silueta → variación y fila → nota
   src/audio/         samples sintetizados, kits, motor de voces y melodía
   src/ui/            overlay, HUD, dock, hojas y pantallas
 server/              estático + API de licencias (solo stdlib)
@@ -117,16 +122,20 @@ docs/                manifiesto, arquitectura, backlog, decisiones, QA y UX
 ## Cómo funciona (resumen)
 
 1. **Visión (20 fps):** el frame se reduce a 320 px de ancho, se compara con un modelo de fondo
-   por píxel (luma + cromaticidad normalizada), se umbraliza con histéresis y se limpia con
-   morfología 3×3. Sobre la máscara se mide la **silueta** (ocupación, altura, base, color,
-   simetría); los blobs se reservan para el HUD y los destellos.
+   por píxel (luma + cromaticidad + saturación), se umbraliza con histéresis y se limpia con
+   morfología 3×3. Sobre la máscara se mide la **parrilla** (ocupación y color dominante por
+   cuadro) y la **silueta** (ocupación, altura, base, color, simetría); los blobs se reservan para
+   el HUD y los destellos.
 2. **Iluminación:** un factor global estimado por histograma corrige la exposición; el fondo
    guarda reflectancia, no brillo. Las sombras (mismo matiz, más oscuras) se descartan.
 3. **Recalibración en caliente:** se estima la traslación de la cámara con los perfiles de
    luminancia y se desplaza el modelo de fondo. Los bloques siguen sobre la pared.
-4. **Música:** una melodía pentatónica en Do con progresión I–V–vi–IV. La silueta elige registro,
-   densidad, timbre, bajo y adorno; el cambio se aplica al empezar el compás y solo tras 0,9 s de
-   forma estable. Toda nota pertenece a la escala o al acorde: no puede desafinar.
+4. **Música:** en **Parrilla** (por defecto), el color de cada cuadro elige un instrumento afinado
+   y su fila un grado pentatónico con la escalera centrada en la nota natural del timbre; sin
+   bloques no hay notas. En **Melodía**, una melodía pentatónica en Do con progresión I–V–vi–IV:
+   la silueta elige registro, densidad, timbre, bajo y adorno, y el cambio se aplica al empezar el
+   compás tras 0,9 s de forma estable. Toda nota pertenece a la escala o al acorde: no puede
+   desafinar.
 5. **Tiempo:** el transporte es una recta anclada a `AudioContext.currentTime`; el scheduler
    programa con 120 ms de lookahead (1,6 s en segundo plano). Cambiar BPM reancla sin saltar.
 6. **Audio:** cada sample se sintetiza una vez con `OfflineAudioContext` y se reproduce con
@@ -152,8 +161,10 @@ docs/                manifiesto, arquitectura, backlog, decisiones, QA y UX
 - El disparo se resuelve al programar la nota (hasta 120 ms antes del cruce visual).
 - La calibración con cámara requiere que la pestaña esté visible (usa `requestAnimationFrame`).
 - `BarcodeDetector` no existe en todos los navegadores; hay respaldo `jsQR` y entrada manual.
-- La música depende de la **silueta**, no de contar piezas: apilar bloques del mismo color no
-  añade notas, cambia el registro o la densidad de la canción.
+- La música depende de la **silueta** en modo melodía, no de contar piezas: apilar bloques del
+  mismo color no añade notas, cambia el registro o la densidad de la canción.
+- En **Parrilla** un bloque ancho suena una vez por columna y una torre del mismo color suena una
+  sola nota; el contraste con la pared importa (blanco sobre blanco puede no detectarse).
 - Las piezas que se tocan se fusionan en un solo blob; es intencionado (ver `docs/DECISIONS.md`).
 - El registro más grave de la marimba suena apagado; pendiente de ajuste de timbre.
 

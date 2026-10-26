@@ -7,7 +7,7 @@
  */
 // Súbelo en cada despliegue: la estrategia es cache-first con revalidación, así
 // que la primera carga tras publicar sirve la versión anterior y la actualiza detrás.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const CACHE = `bloques-shell-${VERSION}`;
 
 const SHELL = [
@@ -38,6 +38,7 @@ const SHELL = [
   './src/vision/camera.js',
   './src/vision/simulator.js',
   './src/vision/structure.js',
+  './src/vision/grid.js',
   './src/sequencer/transport.js',
   './src/sequencer/scheduler.js',
   './src/sequencer/pattern.js',
@@ -47,6 +48,7 @@ const SHELL = [
   './src/audio/melody.js',
   './src/music/song.js',
   './src/music/variation.js',
+  './src/music/grid.js',
   './src/ui/dom.js',
   './src/ui/overlay.js',
   './src/ui/hud.js',

@@ -27,6 +27,21 @@ export const STORAGE_KEYS = Object.freeze({
 export const COLUMN_CHOICES = Object.freeze([8, 12, 16, 24]);
 export const SWEEP_BEATS = 4;
 
+/**
+ * Filas de la parrilla de color. Cada fila es un grado pentatónico: arriba
+ * agudo, abajo grave. Ocho filas cubren algo más de una octava.
+ */
+export const GRID_ROWS = 8;
+
+/** Modos de juego. La parrilla manda; los otros dos quedan como alternativas. */
+export const PLAY_MODES = Object.freeze(['grid', 'melody', 'blocks']);
+
+export const PLAY_MODE_LABELS = Object.freeze({
+  grid: 'Parrilla',
+  melody: 'Melodía',
+  blocks: 'Bloques',
+});
+
 export const LIMITS = Object.freeze({
   bpm: Object.freeze([50, 190]),
   volume: Object.freeze([0, 1]),
@@ -48,9 +63,9 @@ export const DEFAULTS = Object.freeze({
   showStats: false,
   /** Compensación de latencia cámara → audio, en milisegundos. */
   inputOffsetMs: 0,
-  /** Melodía guiada: la estructura varía la canción en vez de disparar notas sueltas. */
-  melody: true,
-  /** Acentos suaves al cruzar bloques, siempre dentro de la escala. */
+  /** `grid`: cada cuadro suena con el instrumento de su color. */
+  playMode: 'grid',
+  /** Acentos suaves al cruzar bloques (solo en el modo melodía). */
   accents: true,
   /** Reproducir un clic de referencia al iniciar cada barrido. */
   metronome: false,
@@ -85,5 +100,5 @@ export const COLOR_HEX = Object.freeze({
   purple: '#8b5cf6',
   magenta: '#ec4899',
   white: '#e5e7eb',
-  black: '#1f2937',
+  black: '#161616',
 });

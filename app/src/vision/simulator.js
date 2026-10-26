@@ -35,7 +35,10 @@ export function createSimulator({ width = 640, height = 480, columns = 16 } = {}
   let lightDrift = 0.16;
 
   function blockSize() {
-    return Math.max(18, Math.round((width / columns) * 0.58));
+    // Un bloque debe ocupar buena parte de su cuadro de la parrilla: si es muy
+    // pequeño, la ocupación medida se queda por debajo del umbral y la celda
+    // nunca suena en el simulador.
+    return Math.max(20, Math.round((width / columns) * 0.72));
   }
 
   function drawBackdrop(target) {

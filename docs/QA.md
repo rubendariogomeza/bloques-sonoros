@@ -1,6 +1,6 @@
 # QA y riesgos
 
-> Última corrida: **24/10/2026** · `node --test` → **88 pruebas, 88 pasan, 0 fallos, 0 omitidas**.
+> Última corrida: **25/10/2026** · `node --test` → **113 pruebas, 113 pasan, 0 fallos, 0 omitidas**.
 > Este documento distingue lo que está **probado de forma automática** de lo que **solo puede
 > validarse con el kit físico**. No se marca como verificado nada que no se haya ejecutado.
 
@@ -14,11 +14,15 @@
 - Servidor HTTP: archivos estáticos, cabeceras, traversal, rate limit, API de licencias.
 - Pipeline de visión con frames sintéticos: fondo, luz, histéresis, morfología, blobs, capas,
   columnas, TTL, alineación por traslación y rechazo de sombras.
+- Parrilla de color: ocupación por cuadro, color solo dentro de la máscara, confirmación/TTL,
+  colapso de filas contiguas y reconstrucción al cambiar la rejilla.
 - Silueta de la estructura (ocupación, altura, base, color dominante, simetría).
 - Variación armónica: cuantización de la silueta, estabilidad de 900 ms y armonía de todas las
   combinaciones posibles.
 - Reproductor de melodía: agenda en el lookahead, afinación por `playbackRate` y acentos.
 - Mapeo color → sample y altura → semitono en los tres kits.
+- Altura de la parrilla: toda fila cae en la pentatónica de Do y respeta la nota natural de cada
+  instrumento.
 
 ### No cubierto por la suite (requiere navegador u hardware)
 
@@ -43,9 +47,9 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
   `localStorage['mt.license.v1']` y `localStorage['mt.device.v1']`.
 - La cámara solo funciona en `localhost` o HTTPS (contexto seguro).
 
-## 3. Matriz automatizada (88 pruebas)
+## 3. Matriz automatizada (113 pruebas)
 
-### 3.1 Audio y tiempo — 24 pruebas
+### 3.1 Audio y tiempo — 28 pruebas
 
 | Archivo | Prueba | Qué protege | HU |
 | --- | --- | --- | --- |
@@ -67,6 +71,8 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | la melodía carga sus timbres aunque el kit sea de percusión | la canción suena con el kit por defecto | HU-12 |
 | | cada timbre de la melodía tiene altura de referencia | afinación sin buffers por nota | HU-12 |
 | | sanitizeMapping rellena huecos y descarta ids inválidos | ajustes corruptos no rompen el audio | HU-10 |
+| | el kit de la parrilla solo usa instrumentos afinados | ningún color puede volverse percusión | HU-14 |
+| | sanitizePitchedMapping descarta percusión y rellena huecos | ajustes corruptos de la parrilla | HU-14 |
 | `audio-melody.test.js` | afina con playbackRate sobre la nota real del sample | melodía sin un buffer por nota | HU-12 |
 | | solo los samples con altura definida sirven de acento | percusión no desafina | HU-12 |
 | | el acento sube de grave a agudo de izquierda a derecha | columna → altura | HU-12 |
@@ -76,7 +82,7 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | cambiar de compás recarga la melodía sin repetir notas | frontera de compás limpia | HU-12 |
 | | un acento con sample no afinado cae en el carillón | respaldo seguro | HU-12 |
 
-### 3.2 Licencias y servidor — 17 pruebas
+### 3.2 Licencias y servidor — 20 pruebas
 
 | Archivo | Prueba | Qué protege | HU |
 | --- | --- | --- | --- |
@@ -98,7 +104,7 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | códigos inexistentes o mal formados no pasan | validación de entrada | HU-01 |
 | | limita la tasa de peticiones de licencia | 30 POST/min por IP | — |
 
-### 3.3 Visión — 31 pruebas
+### 3.3 Visión — 42 pruebas
 
 | Archivo | Prueba | Qué protege | HU |
 | --- | --- | --- | --- |
@@ -115,6 +121,15 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | columnas distintas conviven y se ordenan por altura | varias torres a la vez | HU-09 |
 | | cambiar la rejilla reubica los bloques vivos | cambiar pasos en marcha | HU-07 |
 | | clear vacía el estado musical | salir de la sesión sin residuos | — |
+| `vision-grid.test.js` | pared vacía: ninguna celda activa ni sonando | silencio total sin bloques | HU-14 |
+| | un bloque enciende su cuadro con el color correcto | color → instrumento | HU-14 |
+| | el color se mide solo dentro de la máscara | la pared no dispara el instrumento blanco | HU-14 |
+| | un bloque blanco también enciende su cuadro | neutros con contraste | HU-14 |
+| | un cuadro deja de sonar si el bloque desaparece (TTL) | 340 ms de tolerancia | HU-14 |
+| | un bloque que cruza dos filas del mismo color suena una vez | sin notas duplicadas | HU-14 |
+| | dos colores distintos en filas contiguas suenan los dos | torre multicolor | HU-14 |
+| | columnas distintas se siguen por separado | varias piezas a la vez | HU-14 |
+| | cambiar columnas reconstruye la parrilla sin celdas fantasma | rejilla en caliente | HU-14 |
 | `vision-layers.test.js` | una torre de tres colores produce tres capas ordenadas | descomposición vertical | HU-09 |
 | | una banda fina de transición no crea un bloque fantasma | bordes y mezclas de color | HU-08 |
 | | sin máscara suficiente cae al color del centro | bloques pequeños o lejanos | HU-08 |
@@ -133,8 +148,10 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | un bloque oscuro sí es un bloque | no confundir negro con sombra | HU-13 |
 | | un bloque de color se detecta aunque esté en penumbra | aula con poca luz | HU-13 |
 | | un cambio global de luz se compensa con el factor de luz | deriva de exposición | HU-05 |
+| | un bloque rojo sobre una mesa de madera no se confunde con el fondo | saturación en la diferencia | HU-14 |
+| | la sombra de un bloque sobre madera sigue sin ser un bloque | el nuevo término no readmite sombras | HU-13 |
 
-### 3.4 Música — 16 pruebas
+### 3.4 Música — 23 pruebas
 
 | Archivo | Prueba | Qué protege | HU |
 | --- | --- | --- | --- |
@@ -154,6 +171,13 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | describeIntent resume la variación en una línea | texto del HUD | HU-12 |
 | | la variación solo se aplica cuando la silueta se mantiene estable | 900 ms de histéresis | HU-12 |
 | | un cambio fugaz no reescribe la canción | mover un bloque no cambia el compás | HU-12 |
+| `music-grid.test.js` | toda nota de la escalera pertenece a la pentatónica de Do | la parrilla nunca desafina | HU-14 |
+| | la fila 0 es la más aguda y la última la más grave | arriba agudo, abajo grave | HU-14 |
+| | la fila central conserva la nota natural del instrumento | el bajo se queda grave | HU-14 |
+| | pentatonicMidi recorre grados negativos sin salirse de la escala | octavas completas | HU-14 |
+| | degreeForMidi y pentatonicMidi son coherentes en la pentatónica | ida y vuelta sin deriva | HU-14 |
+| | la fila se recorta a los límites de la parrilla | índices fuera de rango | HU-14 |
+| | la escalera funciona con cualquier número de filas | 4/8/12 filas | HU-14 |
 
 ## 4. Matriz manual en navegador
 
@@ -184,8 +208,15 @@ Estados: ✅ verificado · 🟡 parcial · ⬜ pendiente.
 | M-21 | Variación por silueta | En simulador, colocar bloques altos y luego extendidos | El chip del HUD cambia (`grave/medio/agudo`, `negras/corcheas`) al empezar el compás | ✅ |
 | M-22 | Armonía audible | Escuchar 30 s con varias formas | Ninguna nota desafina; la melodía sigue reconocible | ✅ |
 | M-23 | Acentos | Ajustes → desactivar **Acentos de los bloques** | Cruzar bloques ya no produce el toque extra; la melodía continúa | ✅ |
-| M-24 | Modo bloque → sonido | Ajustes → desactivar **Melodía guiada** | Vuelve el disparo por color y altura (HU-08/09) | ✅ |
+| M-24 | Modo bloque → sonido | Ajustes → Modo de juego → **Bloques** | Vuelve el disparo por color y altura (HU-08/09) | ✅ |
 | M-25 | Sombra sobre la pared | Mover la mano entre el móvil y la pared sin tocar bloques | La variación no cambia y no aparecen bloques fantasma | 🟡 (cubierto por prueba; falta pared real) |
+| M-26 | Modo parrilla | Ajustes → **Parrilla** | El HUD muestra «Celdas», las filas se dibujan y los bloques se tiñen de su color | ✅ |
+| M-27 | Pared vacía en silencio | Calibrar sin bloques y escuchar 15 s | No suena ninguna nota ni aparece celda activa | ✅ |
+| M-28 | Color → instrumento | Poner un bloque de cada color en filas distintas | Cada color suena con su timbre; el HUD cuenta las celdas activas | ✅ |
+| M-29 | Fila → nota | Mover un mismo bloque de arriba abajo | El timbre no cambia; la altura baja de agudo a grave sin salir de la escala | ✅ |
+| M-30 | Una nota por bloque | Poner un bloque a caballo entre dos filas | Suena una sola vez, no dos | ✅ |
+| M-31 | Mapeo de parrilla | Sonidos → cambiar «Rojo → …» y recargar | Solo aparecen instrumentos afinados; el cambio persiste | ✅ |
+| M-32 | Cambio de modo | Alternar Parrilla / Melodía / Bloques en marcha | El audio se recarga, el HUD cambia y el modo persiste al recargar | ✅ |
 
 ## 5. Plan de validación con hardware
 
@@ -291,7 +322,20 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 5. Mover un bloque suelto y devolverlo en < 1 s: la canción **no** debe cambiar.
 6. **Criterio:** 0 notas fuera de la pentatónica de Do o del acorde del compás en 2 minutos de
    improvisación; el pulso no se interrumpe en ningún cambio de forma.
-7. Repetir con **Acentos** desactivado y con **Melodía guiada** desactivado (modo bloque → sonido).
+7. Repetir en modo **Bloques** y en modo **Parrilla** para comparar las tres lecturas.
+
+### 5.11 Parrilla de color (HU-14)
+
+1. Calibrar con la pared vacía y confirmar que el HUD muestra **0 celdas** y no suena nada.
+2. Colocar un bloque en cada una de las 8 filas de una misma columna: debe oírse una escalera
+   ascendente sin ningún semitono fuera de la pentatónica.
+3. Repetir con cada color: el timbre cambia, la altura de la fila se mantiene.
+4. Poner dos bloques del mismo color en filas contiguas: debe sonar una sola nota.
+5. Poner dos colores distintos apilados: deben sonar los dos instrumentos a la vez.
+6. Retirar un bloque y devolverlo en < 340 ms: la nota no se corta ni se duplica.
+7. Cambiar de 8 a 16 columnas en marcha: las celdas se recolocan y el pulso no se detiene.
+8. **Criterio:** con la pared vacía no hay ninguna nota en 30 s; con bloques, cada pieza produce
+   exactamente una nota por paso y ninguna combinación desafina.
 
 ## 6. Riesgos
 
@@ -313,6 +357,8 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | R-14 | La madera del fondo se clasifica como `orange` | Alta | Medio | La calibración la elimina; vigilar cambios de luz y de encuadre | CV |
 | R-15 | Una estructura enorme supera `maxArea = 45 %` y desaparece del HUD | Media | Bajo | La melodía no depende de los blobs; subir el límite si el HUD queda vacío | CV |
 | R-16 | La variación cambia demasiado a menudo y distrae | Media | Medio | Histéresis de 900 ms y cambio solo en la columna 0 | Audio |
+| R-17 | Blanco sobre pared clara o negro sobre fondo oscuro no alcanza la ocupación mínima | Media | Medio | Umbral 0,12 y muestreo de color dentro de la máscara; validar con el kit y, si falla, subir sensibilidad o retirar esos bloques | CV |
+| R-18 | Un bloque ancho dispara varias notas al cruzar columnas | Media | Bajo | Es intencional (una nota por columna); si molesta, reducir columnas o usar bloques más estrechos | Audio |
 
 ## 7. Limitaciones conocidas
 
@@ -328,6 +374,10 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 - La variación musical se decide por **silueta**: apilar piezas del mismo color no añade notas,
   cambia el registro/la densidad de la canción.
 - La marimba una octava abajo (`register 0`) suena opaca; pendiente de ajuste de timbre.
+- La parrilla exige **contraste** con el fondo calibrado: un bloque del mismo color que la pared
+  puede no superar `GRID_MIN_OCCUPANCY`. La saturación ayuda con colores, no con neutros.
+- Un bloque ancho ocupa varias columnas y suena una vez por columna; una torre del mismo color
+  suena una sola nota (la de mayor ocupación).
 
 ## 8. Criterios de salida (release gate)
 
@@ -350,4 +400,6 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | 24/10/2026 | Windows 11 · Node 24.19.0 | 88/88 | Añadidas silueta, variación, canción, melodía y sombras |
 | 24/10/2026 | Chrome · simulador | ✅ | HU-12: 34–44 notas/8 s, 0 fuera de escala; BPM 100→140 sin cortes; pausa detiene el agendado |
 | 24/10/2026 | Chrome · sondeo de vídeo del kit | ✅ | 14 fotogramas: piezas fusionadas, mesa `orange`, blob > 50 % → origen de ADR-15 |
+| 25/10/2026 | Windows 11 · Node 24.19.0 | 113/113 | Añadidas parrilla, altura pentatónica, mapeo afinado y rojo sobre madera |
+| 25/10/2026 | Chrome · simulador | ✅ | Parrilla: pared vacía en silencio, 10 colores activos (0,25–0,37 de ocupación), una nota por bloque, cambio de modo y mapeo persistentes |
 | Pendiente | Android / iPhone + kit | — | Cámara, QR impreso, luz, latencia, PWA, pared |

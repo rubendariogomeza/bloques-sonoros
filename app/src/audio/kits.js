@@ -3,7 +3,7 @@
  * declara si la altura del bloque influye en la nota.
  */
 import { COLOR_CLASSES } from '../core/config.js';
-import { SAMPLE_IDS, SAMPLE_LABELS } from './synth.js';
+import { SAMPLE_IDS, SAMPLE_LABELS, SAMPLE_BASE_MIDI } from './synth.js';
 import { SCALES } from '../sequencer/pattern.js';
 
 export const KITS = Object.freeze([
@@ -24,6 +24,25 @@ export const KITS = Object.freeze([
       magenta: 'rim',
       white: 'shaker',
       black: 'wood',
+    }),
+  }),
+  Object.freeze({
+    id: 'grid',
+    name: 'Parrilla',
+    description: 'Diez instrumentos afinados, uno por color. La fila elige la nota.',
+    mode: 'melodic',
+    scale: 'pentatonic',
+    mapping: Object.freeze({
+      red: 'marimba',
+      orange: 'kalimba',
+      yellow: 'bell',
+      green: 'pluck',
+      cyan: 'glass',
+      blue: 'chime',
+      purple: 'musicbox',
+      magenta: 'cello',
+      white: 'flute',
+      black: 'bass',
     }),
   }),
   Object.freeze({
@@ -68,6 +87,16 @@ export const KITS = Object.freeze([
 
 export const KIT_IDS = KITS.map((kit) => kit.id);
 
+export const GRID_KIT_ID = 'grid';
+export const GRID_KIT = getKit(GRID_KIT_ID);
+
+/** Samples con altura definida: los únicos que pueden sonar en la parrilla. */
+export const PITCHED_SAMPLE_IDS = Object.freeze(Object.keys(SAMPLE_BASE_MIDI));
+
+export function isPitchedSample(sampleId) {
+  return Object.hasOwn(SAMPLE_BASE_MIDI, sampleId);
+}
+
 export function getKit(kitId) {
   return KITS.find((kit) => kit.id === kitId) ?? KITS[0];
 }
@@ -94,7 +123,26 @@ export function sanitizeMapping(kit, candidate = {}) {
   return mapping;
 }
 
+/**
+ * Mapeo de la parrilla: solo instrumentos con altura. Si un ajuste guardado
+ * apunta a percusión, cae en el instrumento por defecto de ese color.
+ */
+export function sanitizePitchedMapping(candidate = {}) {
+  const mapping = {};
+  for (const color of COLOR_CLASSES) {
+    const value = candidate[color];
+    mapping[color] = isPitchedSample(value) ? value : GRID_KIT.mapping[color];
+  }
+  return mapping;
+}
+
 export const SAMPLE_OPTIONS = SAMPLE_IDS.filter((id) => id !== 'click').map((id) => ({
+  id,
+  label: SAMPLE_LABELS[id] ?? id,
+}));
+
+/** Lista de la hoja de Sonidos cuando manda la parrilla. */
+export const PITCHED_SAMPLE_OPTIONS = PITCHED_SAMPLE_IDS.map((id) => ({
   id,
   label: SAMPLE_LABELS[id] ?? id,
 }));

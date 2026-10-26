@@ -1,6 +1,6 @@
 /** Hojas modales: kits de sonido, ajustes y ayuda. */
-import { COLOR_CLASSES, COLOR_HEX, COLOR_LABELS, COLUMN_CHOICES, APP } from '../core/config.js';
-import { KITS, SAMPLE_OPTIONS } from '../audio/kits.js';
+import { COLOR_CLASSES, COLOR_HEX, COLOR_LABELS, COLUMN_CHOICES, PLAY_MODE_LABELS, APP } from '../core/config.js';
+import { KITS, SAMPLE_OPTIONS, PITCHED_SAMPLE_OPTIONS } from '../audio/kits.js';
 import { el, clear, setPressed } from './dom.js';
 
 export function createSheets({ root, handlers }) {
@@ -63,8 +63,9 @@ export function createSheets({ root, handlers }) {
   }
 
   function openKits(state) {
+    const gridMode = state.playMode === 'grid';
+    const options = gridMode ? PITCHED_SAMPLE_OPTIONS : SAMPLE_OPTIONS;
     const kitList = el('div', { class: 'kits' });
-
     const mappingList = el('div', { class: 'mapping' });
 
     function renderMapping(mapping) {
@@ -75,9 +76,13 @@ export function createSheets({ root, handlers }) {
           {
             class: 'select',
             'aria-label': `Sonido para el bloque ${COLOR_LABELS[color]}`,
-            onchange: (event) => handlers.onMapping(color, event.target.value),
+            onchange: (event) => {
+              const value = event.target.value;
+              if (gridMode) handlers.onGridMapping(color, value);
+              else handlers.onMapping(color, value);
+            },
           },
-          SAMPLE_OPTIONS.map((option) =>
+          options.map((option) =>
             el('option', {
               value: option.id,
               text: option.label,
@@ -96,6 +101,7 @@ export function createSheets({ root, handlers }) {
     }
 
     function renderKits() {
+      if (gridMode) return;
       clear(kitList);
       for (const kit of KITS) {
         const card = el(
@@ -118,23 +124,38 @@ export function createSheets({ root, handlers }) {
     }
 
     renderKits();
-    renderMapping(state.mapping);
+    renderMapping(gridMode ? state.gridMapping : state.mapping);
 
-    const node = el('section', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Sonidos de los bloques' }, [
-      head('Sonidos de los bloques'),
+    const node = el('section', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': gridMode ? 'Sonidos de la parrilla' : 'Sonidos de los bloques' }, [
+      head(gridMode ? 'Sonidos de la parrilla' : 'Sonidos de los bloques'),
       el('div', { class: 'sheet__body' }, [
+        gridMode
+          ? el('p', { class: 'setting__hint', text: 'En la parrilla cada color es un instrumento afinado y la fila elige la nota. Solo aparecen instrumentos con altura.' })
+          : el('div', null, [
+              el('div', { class: 'section-title', text: 'Kit' }),
+              kitList,
+            ]),
         el('div', null, [
-          el('div', { class: 'section-title', text: 'Kit' }),
-          kitList,
-        ]),
-        el('div', null, [
-          el('div', { class: 'section-title', text: 'Color → sonido' }),
+          el('div', { class: 'section-title', text: 'Color → instrumento' }),
           mappingList,
-          el('p', { class: 'setting__hint', text: 'En los kits melódicos, la altura del bloque también elige la nota.' }),
+          el('p', {
+            class: 'setting__hint',
+            text: gridMode
+              ? 'Si dos colores se confunden con la luz, asígnales el mismo instrumento.'
+              : 'En los kits melódicos, la altura del bloque también elige la nota.',
+          }),
         ]),
       ]),
       el('div', { class: 'sheet__foot' }, [
-        el('button', { class: 'btn btn--ghost btn--sm', type: 'button', onclick: () => handlers.onResetMapping() }, ['Restablecer kit']),
+        el(
+          'button',
+          {
+            class: 'btn btn--ghost btn--sm',
+            type: 'button',
+            onclick: () => (gridMode ? handlers.onResetGridMapping() : handlers.onResetMapping()),
+          },
+          [gridMode ? 'Restablecer parrilla' : 'Restablecer kit'],
+        ),
         el('button', { class: 'btn btn--sm', type: 'button', 'data-close': true }, ['Listo']),
       ]),
     ]);
@@ -145,7 +166,7 @@ export function createSheets({ root, handlers }) {
       refresh() {
         state.kitId = handlers.getKitId();
         renderKits();
-        renderMapping(handlers.getMapping());
+        renderMapping(gridMode ? handlers.getGridMapping() : handlers.getMapping());
       },
     };
   }
@@ -231,9 +252,37 @@ export function createSheets({ root, handlers }) {
       );
     }
 
+    const playModeGroup = el('div', { class: 'segmented' });
+    const playModeButtons = [];
+    for (const value of ['grid', 'melody', 'blocks']) {
+      const button = el('button', {
+        type: 'button',
+        text: PLAY_MODE_LABELS[value],
+        'aria-pressed': String(state.playMode === value),
+        onclick: () => {
+          if (state.playMode === value) return;
+          state.playMode = value;
+          handlers.onPlayMode(value);
+          playModeButtons.forEach((item, index) =>
+            setPressed(item, ['grid', 'melody', 'blocks'][index] === value),
+          );
+        },
+      });
+      playModeButtons.push(button);
+      playModeGroup.append(button);
+    }
+
     const node = el('section', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Ajustes de la clase' }, [
       head('Ajustes de la clase'),
       el('div', { class: 'sheet__body' }, [
+        el('div', { class: 'setting' }, [
+          el('div', { class: 'setting__head' }, [el('div', { class: 'setting__label', text: 'Modo de juego' })]),
+          playModeGroup,
+          el('div', {
+            class: 'setting__hint',
+            text: 'Parrilla: cada cuadro suena con el instrumento de su color; pared vacía, silencio. Melodía: la forma de la estructura cambia la canción. Bloques: cada color dispara su sonido.',
+          }),
+        ]),
         el('div', { class: 'setting' }, [
           el('div', { class: 'setting__head' }, [el('div', { class: 'setting__label', text: 'Rejilla del compás' }), columnsValue]),
           columnsGroup,
@@ -269,14 +318,8 @@ export function createSheets({ root, handlers }) {
           onInput: (value) => handlers.onVolume(value / 100),
         }),
         toggle({
-          label: 'Melodía guiada',
-          hint: 'La forma de los bloques cambia la canción sin romper la armonía. Desactívalo para volver al modo bloque → sonido.',
-          checked: state.melody,
-          onChange: (checked) => handlers.onMelody(checked),
-        }),
-        toggle({
           label: 'Acentos de los bloques',
-          hint: 'Un toque suave cada vez que la línea cruza un bloque, siempre dentro de la escala.',
+          hint: 'Solo en el modo melodía: un toque suave al cruzar un bloque, siempre dentro de la escala.',
           checked: state.accents,
           onChange: (checked) => handlers.onAccents(checked),
         }),
@@ -341,8 +384,10 @@ export function createSheets({ root, handlers }) {
         el('ol', { class: 'muted', style: { lineHeight: '1.7', paddingLeft: '18px' } }, [
           el('li', { text: 'Apoya el celular en el soporte del kit mirando la pared, sin moverlo durante la clase.' }),
           el('li', { text: 'Retira los bloques y toca Calibrar: la app aprende el fondo vacío.' }),
-          el('li', { text: 'Coloca bloques en las columnas. Cada color tiene su sonido; apilar varios suena a la vez.' }),
+          el('li', { text: 'Con la pared vacía no suena nada. Cada bloque que colocas enciende su cuadro: el color elige el instrumento y la fila, la nota.' }),
+          el('li', { text: 'La línea recorre las columnas y hace sonar los cuadros ocupados. Varios bloques en la misma columna suenan juntos, como un acorde.' }),
           el('li', { text: 'Si la cámara se mueve, toca ⟳ para recalibrar sin cortar la música.' }),
+          el('li', { text: 'En Ajustes puedes cambiar a los modos Melodía o Bloques si quieres otra forma de jugar.' }),
         ]),
         el('p', { class: 'fineprint', text: 'Los niños solo tocan los bloques: el feedback es el sonido.' }),
       ]),

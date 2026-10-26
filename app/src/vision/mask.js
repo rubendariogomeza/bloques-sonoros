@@ -67,7 +67,16 @@ export function createMaskProcessor(width, height) {
           Math.abs(b / sumNow - bBg / sumBg)) *
         0.5;
 
-      const d = 0.62 * dLuma + 0.58 * dChroma;
+      // La saturación distingue un bloque rojo de una mesa de madera naranja:
+      // mismo brillo y tono parecido, pero el bloque está mucho más saturado.
+      // Las sombras conservan la saturación del fondo, así que no se cuelan.
+      const maxNow = r > g ? (r > b ? r : b) : g > b ? g : b;
+      const minNow = r < g ? (r < b ? r : b) : g < b ? g : b;
+      const maxBg = rBg > gBg ? (rBg > bBg ? rBg : bBg) : gBg > bBg ? gBg : bBg;
+      const minBg = rBg < gBg ? (rBg < bBg ? rBg : bBg) : gBg < bBg ? gBg : bBg;
+      const dSat = Math.abs((maxNow - minNow) / (maxNow + 1e-3) - (maxBg - minBg) / (maxBg + 1e-3));
+
+      const d = 0.5 * dLuma + 0.45 * dChroma + 0.55 * dSat;
       // Sombra: mismo color, solo más oscuro. No es un bloque y no debe cambiar
       // la silueta (ni, por tanto, la variación musical).
       const ratio = luma / (lumaBg + 1e-3);

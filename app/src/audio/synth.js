@@ -25,6 +25,11 @@ export const SAMPLE_LABELS = Object.freeze({
   pluck: 'Pizzicato',
   water: 'Agua',
   chime: 'Carillón',
+  kalimba: 'Kalimba',
+  flute: 'Flauta',
+  cello: 'Violonchelo',
+  musicbox: 'Caja de música',
+  glass: 'Vasos',
 });
 
 /**
@@ -39,6 +44,11 @@ export const SAMPLE_BASE_MIDI = Object.freeze({
   pluck: 64, // Mi4 · 329,6 Hz
   bass: 45, // La2 · 110 Hz
   chime: 84, // Do6 aproximado
+  kalimba: 72, // Do5 · 523,25 Hz
+  flute: 76, // Mi5 · 659,25 Hz
+  cello: 48, // Do3 · 130,81 Hz
+  musicbox: 84, // Do6 · 1046,5 Hz
+  glass: 88, // Mi6 · 1318,5 Hz
 });
 
 const NOISE_SECONDS = 1.2;
@@ -321,6 +331,68 @@ export const SYNTH_DEFS = Object.freeze({
       osc.start(0);
       osc.stop(1.0);
       tone(ctx, out, { from: 2340, to: 2340, duration: 0.6, peak: 0.06, decay: 0.5 });
+    },
+  },
+
+  kalimba: {
+    duration: 1.0,
+    build(ctx, out) {
+      tone(ctx, out, { type: 'triangle', from: 523.25, to: 523.25, duration: 0.9, peak: 0.5, decay: 0.75 });
+      tone(ctx, out, { type: 'sine', from: 1046.5, to: 1046.5, duration: 0.45, peak: 0.18, decay: 0.32 });
+      tone(ctx, out, { type: 'sine', from: 2093, to: 2093, duration: 0.22, peak: 0.06, decay: 0.12 });
+    },
+  },
+
+  flute: {
+    duration: 1.1,
+    build(ctx, out) {
+      tone(ctx, out, { from: 659.25, to: 659.25, duration: 1.0, peak: 0.4, decay: 0.85, attack: 0.05 });
+      // Soplo: ruido filtrado muy suave, solo en el ataque.
+      const noise = makeNoise(ctx, 0.5);
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 1800;
+      band.Q.value = 0.8;
+      const gain = makeGain(ctx, out, 0.05, 0.06, 0.3);
+      noise.connect(band).connect(gain);
+      noise.start(0);
+      noise.stop(0.5);
+    },
+  },
+
+  cello: {
+    duration: 1.0,
+    build(ctx, out) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 130.81;
+      const lowpass = ctx.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.frequency.setValueAtTime(900, 0);
+      lowpass.frequency.exponentialRampToValueAtTime(380, 0.8);
+      lowpass.Q.value = 2;
+      const gain = makeGain(ctx, lowpass, 0.36, 0.07, 0.7);
+      osc.connect(lowpass).connect(gain);
+      osc.start(0);
+      osc.stop(0.95);
+    },
+  },
+
+  musicbox: {
+    duration: 1.2,
+    build(ctx, out) {
+      tone(ctx, out, { from: 1046.5, to: 1046.5, duration: 1.1, peak: 0.34, decay: 0.95 });
+      tone(ctx, out, { from: 1568, to: 1568, duration: 0.7, peak: 0.16, decay: 0.55 });
+      tone(ctx, out, { from: 2637, to: 2637, duration: 0.4, peak: 0.08, decay: 0.25 });
+    },
+  },
+
+  glass: {
+    duration: 1.3,
+    build(ctx, out) {
+      tone(ctx, out, { from: 1318.5, to: 1318.5, duration: 1.2, peak: 0.28, decay: 1.05 });
+      tone(ctx, out, { from: 1975.5, to: 1975.5, duration: 0.8, peak: 0.12, decay: 0.6 });
+      tone(ctx, out, { from: 2637, to: 2637, duration: 0.5, peak: 0.06, decay: 0.35 });
     },
   },
 

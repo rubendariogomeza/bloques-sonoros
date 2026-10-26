@@ -34,6 +34,7 @@ app/src/
   vision/structure.js   silueta: ocupación por columna, altura, base, color dominante
   vision/layers.js      bandas de color verticales (torres)
   vision/columns.js     confirmación, TTL y estado musical por columna
+  vision/grid.js        parrilla columnas × filas: ocupación y color dominante
   vision/align.js       estimación de traslación + desplazamiento del fondo
   vision/engine.js      orquesta el pipeline; sin rAF propio
   vision/camera.js      getUserMedia + ciclo de vida del stream
@@ -45,6 +46,7 @@ app/src/
 
   music/song.js         progresión, melodía pentatónica y variaciones por compás
   music/variation.js    silueta → variación (registro, densidad, timbre, bajo, adorno)
+  music/grid.js         fila de la parrilla → nota pentatónica del instrumento
 
   audio/synth.js        síntesis offline de samples (sin assets)
   audio/kits.js         kits y mapeos color → sample
@@ -198,6 +200,28 @@ POST /api/license/verify        → { token, deviceId }
 Rate limit: 30 POST/minuto por IP. Cuerpo máximo: 8 KiB. Cabeceras CSP, `nosniff`,
 `frame-ancestors 'none'` y `permissions-policy: camera=(self)`.
 
+### 4.10 `createGridExtractor(width, height, opts)` + `gridMidi(baseMidi, row, rows)`
+
+Modo **parrilla** (por defecto): el área visible se divide en `columns × GRID_ROWS`
+(8 filas) y cada cuadro decide instrumento y nota.
+
+- `measure(binary, rgba, now)` recorre la máscara morfológica una vez y devuelve
+  `{ columns, rows, active, activeCount, coverage, cells }`. `cells` se reutiliza en cada frame.
+- Cada celda: `{ index, column, row, occupancy, color, active, playing }`.
+  `occupancy` = fracción del cuadro separada del fondo calibrado, suavizada con EMA 0,6.
+- **Ocupación primero, color después:** el color se clasifica solo dentro de los píxeles
+  ocupados. Una pared vacía deja `activeCount = 0`, así que no suena nada.
+- `color` = color mayoritario del cuadro; blanco y negro ceden ante cualquier color saturado.
+- `GRID_MIN_OCCUPANCY = 0.12`, `GRID_CONFIRM_HITS = 2`, `GRID_TTL_MS = 340`: dos frames
+  seguidos para confirmar y 340 ms de gracia para que un parpadeo no corte la nota.
+- `playing`: en cada tramo vertical contiguo del mismo color solo queda la celda con más
+  ocupación. Un bloque que cruza la frontera de dos filas suena una sola vez.
+- `reset()`, `setColumns()`, `setRows()` recalculan la rejilla sin allocations por frame.
+- `gridMidi(baseMidi, row, rows, keyMidi)` devuelve la nota de la fila para un instrumento
+  cuya nota natural es `baseMidi`: la escalera de 8 grados pentatónicos se centra en esa nota,
+  así el bajo se queda grave y la campana aguda. `gridLadder` expone la escalera completa y
+  `pentatonicMidi`/`degreeForMidi` convierten grado ↔ nota. Toda nota cae en la pentatónica de Do.
+
 ## 5. Pipeline de visión
 
 ```
@@ -206,16 +230,26 @@ video/canvas
   → background: luma + cromaticidad normalizada
   → mask: umbral dinámico (ruido) + histéresis (entrar/salir) + rechazo de sombras
   → morphology: apertura (quita píxeles sueltos) + cierre (rellena huecos)
+  → grid: ocupación por cuadro + color dominante (modo parrilla)
   → structure: silueta completa (ocupación, altura, base, color, simetría)
   → components: BFS 8-conectado, área mínima/máxima, fill
   → layers: color por fila + agrupación en bandas verticales
   → columns: confirmación por hits + TTL + una entrada por color
-  → main: intentTracker(silueta) → variación; handleStep → melodía + acentos
+  → main: según playMode
+       grid    → handleGridStep → gridMidi(color, row) → playNote
+       melody  → intentTracker(silueta) → variación; handleStep → melodía + acentos
+       blocks  → handleStep → playColor por columna
 ```
 
-- **Color:** se clasifica por cromaticidad, no por brillo, para tolerar cambios de luz.
+El motor solo ejecuta los analizadores que el modo necesita (`trackGrid`, `trackStructure`,
+`trackBlobs`), así que la parrilla no paga el costo de etiquetar piezas.
+
+- **Color:** se clasifica por cromaticidad, no por brillo, para tolerar cambios de luz. La
+  diferencia de la máscara combina luma, cromaticidad y saturación
+  (`0,5·dLuma + 0,45·dChroma + 0,55·dSat`) para que un bloque rojo sobre madera se separe.
 - **Sombra:** si el píxel conserva la cromaticidad del fondo y solo es más oscuro (ratio
-  0,3–0,92), no es un bloque. Sin esto, la sombra del móvil cambiaría la canción sola.
+  0,3–0,92, `dChroma < 0,028`), no es un bloque. Sin esto, la sombra del móvil cambiaría la
+  canción sola.
 - **Silueta:** es la fuente de la variación musical. No intenta separar piezas: con el kit real
   los bloques se tocan y forman un único blob.
 - **Capas:** una torre es un solo blob; las bandas contiguas del mismo color se fusionan y las
@@ -253,6 +287,30 @@ structure ──► intentFromStructure ──► cuantización (5 dimensiones)
   desafina (prueba exhaustiva de 162 variaciones × 8 compases).
 - Los acentos son un adorno: máximo dos por paso y solo en pasos pares, para no tapar la melodía.
 
+### 5.2 De la parrilla a la música
+
+```
+frame ──► grid.measure ──► celdas activas ──► ¿columna del barrido?
+                                              │ sí
+                                   gridMidi(color, row, 8)
+                                              │
+                                   playNote(sample, { midi, gain, pan })
+```
+
+| Celda | Decisión | Efecto audible |
+| --- | --- | --- |
+| `occupancy` ≥ 0,12 | la celda existe | sin bloque no hay nota (silencio total) |
+| `color` dominante | instrumento | 10 timbres afinados del kit **Parrilla** |
+| `row` (0 arriba … 7 abajo) | grado pentatónico | escalera centrada en la nota natural del timbre |
+| columna = frontera del barrido | momento | suena al pasar la línea, no antes |
+
+- El color se mapea con `settings.mappings.grid` (independiente del kit elegido) y solo admite
+  instrumentos con altura definida: un color no puede convertirse en bombo.
+- Un bloque que ocupa varias columnas suena una vez por columna; una torre del mismo color suena
+  como una sola nota (la celda con más ocupación) para no duplicar el mismo instrumento.
+- Modos alternativos: **melodía** (HU-12, variación por silueta) y **bloques** (HU-08/09,
+  `playColor` por columna). `playMode` vive en `settings` y se cambia desde **Ajustes**.
+
 
 ## 6. Invariantes y dónde se garantizan
 
@@ -266,11 +324,15 @@ structure ──► intentFromStructure ──► cuantización (5 dimensiones)
 | La armonía nunca se rompe | `renderBar` solo emite pentatónica + notas del acorde; prueba exhaustiva de variaciones. |
 | La variación no corta el pulso | Se aplica en `column === 0`, leyendo el `intentTracker` ya confirmado. |
 | Polifonía por columna | `columnModel.active()` agrupa por columna y `handleStep` recorre todas las entradas. |
+| La pared vacía no suena | `grid.measure` exige `occupancy ≥ 0,12` sobre la máscara calibrada; sin ocupación no hay celda activa. |
+| La parrilla nunca desafina | `gridMidi` recorre grados de la pentatónica de Do centrados en la nota del instrumento. |
 
 ## 7. Rendimiento y memoria
 
 - Visión a **20 fps** sobre 320×240 (~76 800 píxeles); el frame se recorta antes de procesar.
-- Buffers de fondo, máscara, morfología, etiquetado y capas se crean una vez por sesión.
+- Buffers de fondo, máscara, morfología, parrilla, etiquetado y capas se crean una vez por sesión.
+- El motor solo ejecuta los analizadores del modo activo (`trackGrid`, `trackStructure`,
+  `trackBlobs`); la parrilla recorre la máscara una vez y reutiliza celdas e histogramas.
 - Un único `requestAnimationFrame` para visión + overlay; sin `setInterval` de render.
 - El scheduler usa `setTimeout` de 25 ms solo como despertador.
 - `dispose()`/`stop()` en cámara, motor de visión, overlay, audio y scheduler al cambiar de vista.
@@ -289,8 +351,12 @@ structure ──► intentFromStructure ──► cuantización (5 dimensiones)
 ## 9. Deuda y límites conocidos
 
 - **Kit real:** medido sobre metraje del kit. Los bloques se tocan y forman un solo blob, y la
-  madera del fondo se clasifica como `orange`; por eso la música se decide por **silueta** y no
-  por piezas. Separar piezas queda descartado (ver DECISIONS.md).
+  madera del fondo se clasifica como `orange`; por eso el modo melodía decide por **silueta** y no
+  por piezas. Separar piezas queda descartado (ver DECISIONS.md). El modo parrilla no separa
+  piezas: mide ocupación y color por cuadro.
+- **Neutros en la parrilla:** blanco sobre pared blanca y negro sobre fondo oscuro pueden no
+  alcanzar `GRID_MIN_OCCUPANCY`; falta validarlo con el kit real. Los colores saturados están
+  cubiertos tras añadir el término de saturación a la máscara.
 - **Cámara real:** el camino `getUserMedia` no se validó en hardware dentro de este entorno; la
   lógica de visión sí está cubierta por pruebas sintéticas. Ver [QA.md](QA.md).
 - **Registro grave:** la marimba a `rate 0.5` (una octava abajo) suena apagada. Si el profesor

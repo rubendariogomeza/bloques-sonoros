@@ -1,6 +1,6 @@
 # Backlog y estado
 
-> Estado verificado el 24/10/2026. `npm test` → **88 pruebas, 0 fallos**.
+> Estado verificado el 25/10/2026. `node --test` → **113 pruebas, 0 fallos**.
 > Leyenda: ✅ implementado y verificado · 🟡 implementado, pendiente de validación en hardware · ⛔ no empezado.
 
 ## Resumen
@@ -14,12 +14,13 @@
 | HU-05 Tolerancia a la luz | ✅ | `background.js` (factor global + reflectancia); prueba con +28 % de luz. |
 | HU-06 Barrido continuo | ✅ | `sequencer/transport.js`; pruebas de posición lineal, reinicio y 10 min sin drift. |
 | HU-07 Cambio de BPM sin cortes | ✅ | `transport.setBpm` + `scheduler.setBpm`; 2 pruebas + verificación visual del HUD (96 → 140). |
-| HU-08 Disparo por atributos físicos | ✅ | `vision/color.js`, `layers.js`, `columns.js`, `audio/kits.js`; pruebas de color, capas y mapeo. Modo alternativo desde HU-12 (ajuste «Melodía guiada» desactivado). |
+| HU-08 Disparo por atributos físicos | ✅ | `vision/color.js`, `layers.js`, `columns.js`, `audio/kits.js`; pruebas de color, capas y mapeo. Modo alternativo: Ajustes → Modo de juego → **Bloques**. |
 | HU-09 Polifonía por apilamiento | ✅ | `columns.active()` + `handleStep`; prueba de torre de 3 colores y tope de 48 voces. Modo alternativo desde HU-12. |
 | HU-10 Mapeo de sonidos | ✅ | `ui/sheets.js` + `audio/engine.setMapping`; hoja verificada y persistencia en `mt.settings.v1`. |
 | HU-11 Monitoreo visual | ✅ | `ui/overlay.js`; verificado en simulador (barrido, cajas, destellos). Cámara real pendiente. |
 | HU-12 Melodía reactiva a la silueta | ✅ | `vision/structure.js`, `music/variation.js`, `music/song.js`, `audio/melody.js`; 14 pruebas (silueta, variación, armonía exhaustiva, reproductor, timbres). Verificado en navegador: 34–94 notas/8–12 s, 0 notas fuera de escala. Los timbres se cargan aparte del kit: la melodía suena también con el kit de percusión por defecto. |
 | HU-13 Montaje en pared con soporte 3D | 🟡 | Encuadre apaisado y rechazo de sombras (`vision/mask.js` + `test/vision-mask.test.js`). Falta validar con la pared y la luz del aula. |
+| HU-14 Parrilla de color (modo por defecto) | ✅ | `vision/grid.js`, `music/grid.js`, kit `grid` en `audio/kits.js`; 16 pruebas de parrilla y altura + 4 de mapeo y máscara. Verificado en simulador: pared vacía en silencio, 10 colores activos, una nota por bloque y cambio de modo persistente. |
 
 ## Detalle
 
@@ -116,26 +117,49 @@
 - La calibración se hace con la pared vacía; `recalibrateFast` mueve el fondo sin parar la música.
 - **Pendiente:** validar distancia, ángulo del soporte y sombras reales del aula.
 
+### HU-14 · Parrilla de color (modo por defecto)
+
+- `grid.js` divide el frame en 16 columnas × 8 filas. Cada cuadro mide **ocupación** sobre la
+  máscara calibrada y, solo dentro de lo ocupado, el **color dominante**: una pared vacía da
+  `activeCount = 0` y no suena nada.
+- `GRID_MIN_OCCUPANCY = 0,12`, confirmación de 2 frames y TTL de 340 ms; las filas contiguas del
+  mismo color se colapsan para que un bloque entre dos filas suene una sola vez.
+- `music/grid.js` traduce la fila a un grado pentatónico con la escalera centrada en la nota
+  natural del instrumento (`gridMidi`): el bajo se queda grave y la campana aguda, siempre en Do.
+- El kit **Parrilla** (`id: 'grid'`) tiene 10 timbres afinados y su propio mapeo
+  (`settings.mappings.grid`), independiente del kit elegido. Solo admite instrumentos con altura.
+- `playMode` (`grid | melody | blocks`) vive en `settings`, se cambia en **Ajustes** y el motor de
+  visión solo ejecuta los analizadores del modo activo.
+- La máscara gana un término de saturación (`0,5·dLuma + 0,45·dChroma + 0,55·dSat`) para que el
+  rojo sobre madera se separe sin dejar de rechazar sombras (`dChroma < 0,028`).
+- Verificado en simulador: 10 colores activos, `activeCount = 0` con la pared vacía, una nota por
+  bloque, HUD «Celdas» y persistencia del modo y del mapeo.
+- **Pendiente:** validar con el kit real el contraste de blanco sobre pared clara y negro sobre
+  fondo oscuro.
+
 ## Deuda priorizada
 
-1. **Validar cámara real** (HU-01/02/03/04/11/13): ángulo del soporte, reflejos, luz solar,
+1. **Validar cámara real** (HU-01/02/03/04/11/13/14): ángulo del soporte, reflejos, luz solar,
    sombras de manos y pared.
-2. **Estructuras muy grandes:** `maxArea = 45 %` en `engine.js` puede descartar una construcción
+2. **Contraste de neutros en la parrilla:** el blanco sobre pared blanca y el negro sobre fondo
+   oscuro pueden no alcanzar `GRID_MIN_OCCUPANCY`. Probar con el kit real y, si falla, subir la
+   sensibilidad del color o excluir esos bloques del set.
+3. **Estructuras muy grandes:** `maxArea = 45 %` en `engine.js` puede descartar una construcción
    que llene el encuadre. La silueta musical ya no depende de los blobs, pero el HUD y los
    destellos sí; conviene subir el límite o medir la silueta aparte.
-3. **Registro grave apagado:** la marimba a `rate 0.5` suena opaca. Evaluar subir la melodía una
+4. **Registro grave apagado:** la marimba a `rate 0.5` suena opaca. Evaluar subir la melodía una
    octava o limitar `register` a medio/agudo.
-4. **Medir latencia extremo a extremo** en móviles de gama media y ajustar el valor por defecto de
+5. **Medir latencia extremo a extremo** en móviles de gama media y ajustar el valor por defecto de
    compensación (hoy 0 ms).
-5. **QR impreso**: probar `BarcodeDetector` y `jsQR` con el código del manual a distintas
+6. **QR impreso**: probar `BarcodeDetector` y `jsQR` con el código del manual a distintas
    distancias y con poca luz.
-6. **PWA instalada**: revisar el modo `standalone`, orientación y safe areas en iOS.
-7. **Accesibilidad**: recorrido completo con teclado y lector de pantalla en las hojas.
-8. **Samples personalizados** (fuera del MVP): permitir subir archivos y guardarlos en IndexedDB.
+7. **PWA instalada**: revisar el modo `standalone`, orientación y safe areas en iOS.
+8. **Accesibilidad**: recorrido completo con teclado y lector de pantalla en las hojas.
+9. **Samples personalizados** (fuera del MVP): permitir subir archivos y guardarlos en IndexedDB.
 
 ## Definición de terminado (AGENTS.md)
 
-- [x] `npm test` en verde (88/88), sin skips.
+- [x] `node --test` en verde (113/113), sin skips.
 - [x] Historia verificable con `npm start` en menos de 5 minutos (simulador + licencia).
 - [x] `docs/BACKLOG.md` con el estado real.
 - [x] Sin `console.log` de depuración ni código muerto (se retiraron `bus.js`, `store.js`, `idb.js`

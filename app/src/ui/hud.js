@@ -20,8 +20,7 @@ export function createHud({ hudRoot, bannerRoot, toastRoot }) {
   const blocksChip = el('span', { class: 'chip' }, [
     el('span', { text: 'Bloques' }),
     el('b', { text: '0' }),
-  ]);
-  const statsChip = el('span', { class: 'chip chip--optional' }, [
+  ]);  const statsChip = el('span', { class: 'chip chip--optional' }, [
     el('b', { text: '—' }),
     el('span', { text: 'fps' }),
   ]);
@@ -36,6 +35,7 @@ export function createHud({ hudRoot, bannerRoot, toastRoot }) {
   );
 
   const bpmValue = bpmChip.querySelector('b');
+  const blocksLabel = blocksChip.querySelector('span');
   const blocksValue = blocksChip.querySelector('b');
   const statsValue = statsChip.querySelector('b');
   const stateValue = stateChip.querySelector('b');
@@ -44,8 +44,9 @@ export function createHud({ hudRoot, bannerRoot, toastRoot }) {
 
   let bannerTimer = null;
 
-  function update({ state, bpm, blocks, fps, mode, showStats, variation }) {
+  function update({ state, bpm, blocks, blocksLabel: blocksCaption, fps, mode, showStats, variation }) {
     if (bpm != null) setText(bpmValue, String(Math.round(bpm)));
+    if (blocksCaption) setText(blocksLabel, blocksCaption);
     if (blocks != null) setText(blocksValue, String(blocks));
     if (fps != null) setText(statsValue, String(fps));
     if (variation !== undefined) {

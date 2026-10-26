@@ -2,7 +2,7 @@
  * Punto de entrada de la PWA. Conecta licencia, cámara, visión, transporte,
  * audio y UI. Un único bucle de animación gobierna visión y overlay.
  */
-import { DEFAULTS, LIMITS, COLUMN_CHOICES, COLOR_CLASSES, COLOR_LABELS, STORAGE_KEYS, SWEEP_BEATS, TEST_MODE } from './core/config.js';
+import { DEFAULTS, LIMITS, COLUMN_CHOICES, COLOR_CLASSES, COLOR_LABELS, STORAGE_KEYS, SWEEP_BEATS, TEST_MODE, GRID_ROWS, PLAY_MODES, PLAY_MODE_LABELS } from './core/config.js';
 import { clamp } from './core/util.js';
 import { storage } from './platform/storage.js';
 import { createApiClient, redeemMessage } from './auth/api.js';
@@ -15,8 +15,10 @@ import { createTransport } from './sequencer/transport.js';
 import { createScheduler, LOOKAHEAD_BACKGROUND, LOOKAHEAD_FOREGROUND } from './sequencer/scheduler.js';
 import { createAudioEngine } from './audio/engine.js';
 import { createMelodyPlayer, MELODY_SAMPLE_IDS } from './audio/melody.js';
+import { SAMPLE_BASE_MIDI } from './audio/synth.js';
+import { gridMidi } from './music/grid.js';
 import { BASE_INTENT, createIntentTracker, describeIntent } from './music/variation.js';
-import { KITS, KIT_IDS, getKit, defaultMapping, sampleLabel } from './audio/kits.js';
+import { KITS, KIT_IDS, GRID_KIT_ID, getKit, defaultMapping, sampleLabel, sanitizePitchedMapping } from './audio/kits.js';
 import { createOverlay } from './ui/overlay.js';
 import { createHud } from './ui/hud.js';
 import { createDock } from './ui/dock.js';
@@ -56,6 +58,7 @@ let redeeming = false;
 
 const live = {
   blocks: [],
+  grid: null,
   flashes: [],
   stats: null,
   progress: 0,
@@ -78,6 +81,12 @@ function loadSettings() {
   const stored = storage.get(STORAGE_KEYS.settings, {}) ?? {};
   const merged = { ...DEFAULTS, ...stored };
   const mappingStore = merged.mappings && typeof merged.mappings === 'object' ? merged.mappings : {};
+  // Migración: quien tenía la melodía desactivada conserva el modo bloque → sonido.
+  const playMode = PLAY_MODES.includes(stored.playMode)
+    ? stored.playMode
+    : stored.melody === false
+      ? 'blocks'
+      : DEFAULTS.playMode;
   return {
     bpm: clamp(Math.round(Number(merged.bpm) || DEFAULTS.bpm), LIMITS.bpm[0], LIMITS.bpm[1]),
     columns: COLUMN_CHOICES.includes(Number(merged.columns)) ? Number(merged.columns) : DEFAULTS.columns,
@@ -86,7 +95,7 @@ function loadSettings() {
     sensitivity: clamp(Number(merged.sensitivity) ?? DEFAULTS.sensitivity, 0, 1),
     latencyMs: clamp(Math.round(Number(merged.latencyMs) || 0), 0, 300),
     metronome: Boolean(merged.metronome),
-    melody: merged.melody !== false,
+    playMode,
     accents: merged.accents !== false,
     showStats: Boolean(merged.showStats),
     muted: Boolean(merged.muted),
@@ -103,6 +112,21 @@ function saveSettings() {
 
 function mappingFor(kitId) {
   return settings.mappings[kitId] ?? defaultMapping(kitId);
+}
+
+/** Color → instrumento afinado de la parrilla (independiente del kit elegido). */
+function gridMapping() {
+  return sanitizePitchedMapping(settings.mappings.grid ?? {});
+}
+
+/** Kit que debe estar cargado en el motor según el modo de juego. */
+function audioKitId() {
+  return settings.playMode === 'grid' ? GRID_KIT_ID : settings.kitId;
+}
+
+/** Samples extra que el modo necesita además del kit cargado. */
+function extraSampleIds() {
+  return settings.playMode === 'melody' ? MELODY_SAMPLE_IDS : [];
 }
 
 /* ------------------------------------------------------------------------- */
@@ -140,9 +164,9 @@ async function startSession(mode = 'camera') {
   try {
     loading.setDetail('Cargando sonidos…');
     await audio.init();
-    await audio.loadKit(settings.kitId, (done, total) => {
+    await audio.loadKit(audioKitId(), (done, total) => {
       loading.setDetail(`Cargando sonidos… ${done}/${total}`);
-    }, { extraIds: melodySampleIds() });
+    }, { extraIds: extraSampleIds() });
   } catch (error) {
     source.stop?.();
     const message = error?.message ?? 'No pudimos iniciar el audio.';
@@ -152,13 +176,18 @@ async function startSession(mode = 'camera') {
 
   audio.setVolume(settings.volume);
   audio.setMuted(settings.muted);
-  audio.setMapping(mappingFor(settings.kitId));
+  audio.setMapping(settings.playMode === 'grid' ? gridMapping() : mappingFor(settings.kitId));
 
   const engine = createVisionEngine({
     source,
     columns: settings.columns,
+    rows: GRID_ROWS,
     sensitivity: settings.sensitivity,
     fps: LIMITS.visionFps,
+    // La parrilla no necesita blobs ni silueta: se ahorra el etiquetado por frame.
+    trackBlobs: settings.playMode !== 'grid',
+    trackStructure: settings.playMode === 'melody',
+    trackGrid: settings.playMode === 'grid',
   });
   engine.start();
 
@@ -167,6 +196,7 @@ async function startSession(mode = 'camera') {
   live.calibrated = false;
   live.calibrating = false;
   live.blocks = [];
+  live.grid = null;
   live.flashes = [];
   live.progress = 0;
   live.intent = BASE_INTENT;
@@ -212,6 +242,7 @@ async function teardownSession() {
   session?.source?.stop?.();
   session = null;
   live.blocks = [];
+  live.grid = null;
   live.flashes = [];
   live.stats = null;
   live.calibrated = false;
@@ -258,13 +289,21 @@ async function togglePlay() {
 
 function handleStep({ column, time, pass }) {
   if (!session) return;
-  const now = performance.now();
   const when = time + settings.latencyMs / 1000;
+
+  if (settings.playMode === 'grid') {
+    handleGridStep({ column, when });
+    if (settings.metronome) audio.click(when);
+    return;
+  }
+
+  const now = performance.now();
   const intent = live.intent ?? BASE_INTENT;
   const active = session.engine.columns.active(now);
   const found = active.find((item) => item.column === column);
+  const melodyMode = settings.playMode === 'melody';
 
-  if (settings.melody) {
+  if (melodyMode) {
     // La variación se aplica al empezar el compás: nunca a mitad de nota.
     if (column === 0) melody.beginBar({ bar: pass, intent, stepsPerBar: settings.columns });
     melody.playStep({ bar: pass, step: column, intent, stepsPerBar: settings.columns, when });
@@ -275,12 +314,12 @@ function handleStep({ column, time, pass }) {
     return;
   }
 
-  const mapping = settings.melody ? audio.getMapping() : null;
-  const accents = settings.melody && settings.accents && column % 2 === 0;
+  const mapping = melodyMode ? audio.getMapping() : null;
+  const accents = melodyMode && settings.accents && column % 2 === 0;
   let accentCount = 0;
 
   for (const entry of found.entries) {
-    if (settings.melody) {
+    if (melodyMode) {
       // El acento es un adorno: dos por paso como máximo para no tapar la melodía.
       if (accents && accentCount < 2) {
         melody.playAccent({ sampleId: mapping[entry.color], column, columns: settings.columns, when });
@@ -299,6 +338,43 @@ function handleStep({ column, time, pass }) {
   }
   if (live.flashes.length > 64) live.flashes.splice(0, live.flashes.length - 64);
   if (settings.metronome) audio.click(when);
+}
+
+/**
+ * Modo parrilla: cada cuadro activo de la columna suena con el instrumento de su
+ * color y la nota de su fila. Sin cuadros ocupados no hay sonido (pared vacía,
+ * silencio total).
+ */
+function handleGridStep({ column, when }) {
+  const grid = live.grid;
+  if (!grid) return;
+  const mapping = gridMapping();
+  let voices = 0;
+  for (const cell of grid.active) {
+    if (cell.column === column) voices += 1;
+  }
+  if (voices === 0) return;
+
+  const now = performance.now();
+  const columns = grid.columns;
+  const pan = columns > 1 ? (((column + 0.5) / columns) * 2 - 1) * 0.35 : 0;
+  // Varios bloques en la misma columna forman un acorde: se reparte la ganancia.
+  const gain = clamp(0.62 / Math.sqrt(voices), 0.22, 0.62);
+
+  for (const cell of grid.active) {
+    if (cell.column !== column) continue;
+    const sampleId = mapping[cell.color];
+    const base = SAMPLE_BASE_MIDI[sampleId];
+    if (base == null) continue;
+    audio.playNote(sampleId, {
+      when,
+      midi: gridMidi(base, cell.row, grid.rows),
+      gain,
+      pan,
+    });
+    live.flashes.push({ column, color: cell.color, at: now });
+  }
+  if (live.flashes.length > 64) live.flashes.splice(0, live.flashes.length - 64);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -350,9 +426,15 @@ function startLoop() {
 
     if (session.mode === 'simulator') session.source.tick(dt);
 
+    // El recorte que se procesa debe ser el mismo que se ve en pantalla.
+    if (overlay.view.width > 0 && overlay.view.height > 0) {
+      session.engine.setViewAspect(overlay.view.width / overlay.view.height);
+    }
+
     const result = session.engine.process(ts);
     if (result) {
       live.blocks = result.blocks;
+      live.grid = result.grid;
       live.stats = result.stats;
       live.calibrating = Boolean(result.calibrating);
       live.calibrated = Boolean(result.stats?.calibrated) && !result.calibrating;
@@ -364,7 +446,10 @@ function startLoop() {
       source: session.source.element,
       progress: live.progress,
       columns: settings.columns,
+      rows: GRID_ROWS,
       blocks: live.blocks,
+      grid: live.grid,
+      playMode: settings.playMode,
       flashes: live.flashes,
       calibrated: live.calibrated,
       running: Boolean(scheduler?.running),
@@ -406,6 +491,7 @@ function stateLabel() {
 }
 
 function updateChrome() {
+  const gridMode = settings.playMode === 'grid';
   dock?.update({
     playing: Boolean(scheduler?.running),
     bpm: settings.bpm,
@@ -416,11 +502,12 @@ function updateChrome() {
   hud.update({
     state: stateLabel(),
     bpm: settings.bpm,
-    blocks: live.blocks.length,
+    blocks: gridMode ? (live.grid?.activeCount ?? 0) : live.blocks.length,
+    blocksLabel: gridMode ? 'Celdas' : 'Bloques',
     fps: live.stats?.fps ?? 0,
     mode: live.mode,
     showStats: settings.showStats,
-    variation: settings.melody ? describeIntent(live.intent) : null,
+    variation: settings.playMode === 'melody' ? describeIntent(live.intent) : null,
   });
 }
 
@@ -470,23 +557,32 @@ function setMetronome(value) {
   saveSettings();
 }
 
-function setMelody(value) {
-  const next = Boolean(value);
-  settings.melody = next;
-  melody.reset();
-  saveSettings();
-  updateChrome();
-  // Al activar la melodía hay que asegurar sus timbres aunque el kit sea de percusión.
-  if (next && session) {
-    audio.loadKit(settings.kitId, null, { extraIds: MELODY_SAMPLE_IDS }).catch(() => {
-      hud.notify('No pudimos cargar los sonidos de la melodía.', { kind: 'error' });
-    });
+/** Carga el kit y los samples que el modo de juego necesita. */
+async function ensureAudioForMode() {
+  if (!session) return;
+  try {
+    await audio.loadKit(audioKitId(), null, { extraIds: extraSampleIds() });
+    audio.setMapping(settings.playMode === 'grid' ? gridMapping() : mappingFor(settings.kitId));
+  } catch {
+    hud.notify('No pudimos cargar los sonidos de este modo.', { kind: 'error' });
   }
 }
 
-/** Samples extra que necesita la melodía guiada, además del kit elegido. */
-function melodySampleIds() {
-  return settings.melody ? MELODY_SAMPLE_IDS : [];
+function setPlayMode(mode) {
+  if (!PLAY_MODES.includes(mode) || mode === settings.playMode) return;
+  settings.playMode = mode;
+  melody.reset();
+  intentTracker.reset();
+  live.intent = BASE_INTENT;
+  session?.engine.setTrackers({
+    blobs: mode !== 'grid',
+    structure: mode === 'melody',
+    grid: mode === 'grid',
+  });
+  saveSettings();
+  updateChrome();
+  ensureAudioForMode();
+  hud.notify(`Modo ${PLAY_MODE_LABELS[mode]}`, { timeout: 1800 });
 }
 
 function setAccents(value) {
@@ -510,8 +606,10 @@ function toggleMute() {
 async function changeKit(kitId) {
   if (!KIT_IDS.includes(kitId) || kitId === settings.kitId) return;
   try {
-    await audio.loadKit(kitId, null, { extraIds: melodySampleIds() });
-    audio.setMapping(mappingFor(kitId));
+    if (settings.playMode !== 'grid') {
+      await audio.loadKit(kitId, null, { extraIds: extraSampleIds() });
+      audio.setMapping(mappingFor(kitId));
+    }
     settings.kitId = kitId;
     saveSettings();
     kitsSheet?.refresh();
@@ -535,6 +633,21 @@ function resetMapping() {
   saveSettings();
   kitsSheet?.refresh();
   hud.notify('Sonidos restablecidos.', { kind: 'ok' });
+}
+
+function changeGridMapping(color, sampleId) {
+  const next = sanitizePitchedMapping({ ...gridMapping(), [color]: sampleId });
+  settings.mappings.grid = next;
+  saveSettings();
+  kitsSheet?.refresh();
+  hud.notify(`${COLOR_LABELS[color]} → ${sampleLabel(sampleId)}`, { timeout: 1600 });
+}
+
+function resetGridMapping() {
+  settings.mappings.grid = sanitizePitchedMapping({});
+  saveSettings();
+  kitsSheet?.refresh();
+  hud.notify('Parrilla restablecida.', { kind: 'ok' });
 }
 
 async function changeMode(mode) {
@@ -708,6 +821,8 @@ const handlers = {
     kitsSheet = sheets.openKits({
       kitId: settings.kitId,
       mapping: audio.getMapping(),
+      gridMapping: gridMapping(),
+      playMode: settings.playMode,
       kits: KITS,
     });
   },
@@ -718,7 +833,7 @@ const handlers = {
       latencyMs: settings.latencyMs,
       volume: settings.volume,
       metronome: settings.metronome,
-      melody: settings.melody,
+      playMode: settings.playMode,
       accents: settings.accents,
       showStats: settings.showStats,
       mode: live.mode,
@@ -731,12 +846,15 @@ const handlers = {
   onKit: (id) => changeKit(id),
   onMapping: (color, sampleId) => changeMapping(color, sampleId),
   onResetMapping: () => resetMapping(),
+  onGridMapping: (color, sampleId) => changeGridMapping(color, sampleId),
+  onResetGridMapping: () => resetGridMapping(),
+  getGridMapping: () => gridMapping(),
   onColumns: (value) => setColumns(value),
   onSensitivity: (value) => setSensitivity(value),
   onLatency: (value) => setLatency(value),
   onVolume: (value) => setVolume(value),
   onMetronome: (value) => setMetronome(value),
-  onMelody: (value) => setMelody(value),
+  onPlayMode: (mode) => setPlayMode(mode),
   onAccents: (value) => setAccents(value),
   onStats: (value) => setStats(value),
   onMode: (mode) => changeMode(mode),

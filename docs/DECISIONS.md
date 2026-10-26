@@ -206,7 +206,7 @@ nota.
 
 **Consecuencia:** la armonía es correcta por construcción (prueba exhaustiva de 162 variaciones ×
 8 compases). El cambio es perceptible pero no rompe el pulso. El modo bloque → sonido queda como
-ajuste opcional («Melodía guiada» desactivado).
+ajuste opcional (modo «Bloques»).
 
 ---
 
@@ -240,6 +240,36 @@ dispositivo queda idéntico.
 de compilación (una constante), no una puerta trasera en producción: al desplegar hay que ponerlo
 en `false`, y la prueba `test/auth-license.test.js` cubre ambos estados. El enlace de prueba usa
 un túnel HTTPS temporal, así que depende de que el servidor siga encendido.
+
+---
+
+## ADR-19 · Modo parrilla: color → instrumento, fila → nota
+
+**Contexto:** con el kit real el niño construye rápido y espera oír lo que construyó. La melodía
+reactiva (ADR-16) cambia de forma pero no distingue qué bloque puso ni dónde, así que la sensación
+de autoría es débil. El mapeo uno a uno (ADR-15 descartado) suena caótico con muchas piezas.
+
+**Decisión:** un tercer modo, **parrilla**, que es el de fábrica. El área visible se divide en
+16 columnas × 8 filas; cada cuadro mide **primero la ocupación** sobre el fondo calibrado y, solo
+dentro de los píxeles ocupados, clasifica el **color dominante**. El color elige el instrumento y
+la fila elige el grado pentatónico, con la escalera centrada en la nota natural del instrumento
+(`gridMidi`). La celda suena cuando la línea de barrido cruza su columna.
+
+- La pared vacía deja `activeCount = 0`: silencio total, sin necesidad de un botón de pausa.
+- Los 10 timbres afinados viven en un kit propio (`id: 'grid'`) con mapeo independiente
+  (`settings.mappings.grid`); el profesor solo puede reasignar entre instrumentos con altura.
+- Confirmación de 2 frames y TTL de 340 ms: el ruido no dispara notas y un parpadeo no las corta.
+- Las filas contiguas del mismo color se colapsan para que un bloque a caballo entre dos filas
+  suene una vez.
+
+**Consecuencia:** el niño siente que compone (quita un bloque y desaparece su nota) sin poder
+desafinar: cualquier combinación cae en la pentatónica de Do. `playMode` queda en `settings`
+(`grid | melody | blocks`), con el modo melodía y el modo bloques como alternativas.
+La máscara tuvo que hacerse más sensible al color: el fondo de madera hacía que el rojo se
+perdiera, así que la diferencia combina luma, cromaticidad y **saturación**
+(`0,5·dLuma + 0,45·dChroma + 0,55·dSat`) y el rechazo de sombras exige `dChroma < 0,028`.
+El costo es que blanco sobre pared blanca y negro sobre fondo oscuro siguen siendo frágiles
+(deuda anotada en BACKLOG).
 
 ---
 
