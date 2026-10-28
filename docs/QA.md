@@ -463,4 +463,5 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | 25/10/2026 | Chrome · simulador | ✅ | Parrilla: pared vacía en silencio, 10 colores activos (0,25–0,37 de ocupación), una nota por bloque, cambio de modo y mapeo persistentes |
 | 28/10/2026 | Windows 11 · Node 24.19.0 | 129/129 | Añadidos Retrato (16 pruebas) y contorno melódico; armonía de 1024 semillas × 2 gestos × 8 compases |
 | 28/10/2026 | Chrome · simulador (escena `face`) | ✅ | Retrato: consentimiento, HUD «Rostros 1», chip «Retrato · campana · agudo · bajo», cambio de cara (semilla 565 → 1017), «Retrato · esperando cara» sin cara, 18–19 fps |
+| 28/10/2026 | Chrome · GitHub Pages (`v7`) | ✅ | `sw.js` v7 y módulos nuevos publicados; el aviso de consentimiento aparece, **Activar Retrato** aplica el modo y persiste en `localStorage` |
 | Pendiente | Android / iPhone + kit | — | Cámara, QR impreso, luz, latencia, PWA, pared, caras reales |
