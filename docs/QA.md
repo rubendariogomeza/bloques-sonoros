@@ -222,7 +222,7 @@ Estados: ✅ verificado · 🟡 parcial · ⬜ pendiente.
 | M-15 | Persistencia | Recargar tras cambiar BPM y rejilla | Ajustes y licencia se conservan | ✅ |
 | M-16 | Hojas con teclado | Tab dentro de la hoja; Escape | El foco queda atrapado y vuelve al botón de origen | ⬜ |
 | M-17 | Offline | Instalar PWA → modo avión → recargar | El shell abre y la licencia sigue activa | ⬜ |
-| M-18 | Actualización | Subir `VERSION` y recargar | Recarga automática a la versión nueva; en sesión en vivo, banner **Actualizar** | ⬜ |
+| M-18 | Actualización | Subir `VERSION` y recargar | Recarga automática a la versión nueva; en sesión en vivo, banner **Actualizar** | ✅ (v8 → v9 en Pages) |
 | M-19 | Cámara denegada | Bloquear el permiso y pulsar **Iniciar sesión musical** | Error accionable y opción de bloques virtuales | ⬜ |
 | M-20 | Demo vencida | Esperar 20 min o adelantar el reloj | Vuelve al bloqueo con mensaje de fin de prueba | ⬜ (no se esperó el tiempo completo) |
 | M-21 | Variación por silueta | En simulador, colocar bloques altos y luego extendidos | El chip del HUD cambia (`grave/medio/agudo`, `negras/corcheas`) al empezar el compás | ✅ |
@@ -464,4 +464,5 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | 28/10/2026 | Windows 11 · Node 24.19.0 | 129/129 | Añadidos Retrato (16 pruebas) y contorno melódico; armonía de 1024 semillas × 2 gestos × 8 compases |
 | 28/10/2026 | Chrome · simulador (escena `face`) | ✅ | Retrato: consentimiento, HUD «Rostros 1», chip «Retrato · campana · agudo · bajo», cambio de cara (semilla 565 → 1017), «Retrato · esperando cara» sin cara, 18–19 fps |
 | 28/10/2026 | Chrome · GitHub Pages (`v7`) | ✅ | `sw.js` v7 y módulos nuevos publicados; el aviso de consentimiento aparece, **Activar Retrato** aplica el modo y persiste en `localStorage` |
+| 28/10/2026 | Chrome · GitHub Pages (`v8 → v9`) | ✅ | Actualización automática: la pestaña pasó de la caché v8 a la v9 y la navegación quedó como `reload`; el enlace muestra los cuatro modos y Retrato activo |
 | Pendiente | Android / iPhone + kit | — | Cámara, QR impreso, luz, latencia, PWA, pared, caras reales |
