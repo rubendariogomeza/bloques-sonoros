@@ -348,7 +348,7 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 5. Mover un bloque suelto y devolverlo en < 1 s: la canción **no** debe cambiar.
 6. **Criterio:** 0 notas fuera de la pentatónica de Do o del acorde del compás en 2 minutos de
    improvisación; el pulso no se interrumpe en ningún cambio de forma.
-7. Repetir en modo **Bloques** y en modo **Parrilla** para comparar las tres lecturas.
+7. Repetir en modo **Retrato**, **Bloques** y **Parrilla** para comparar las cuatro lecturas.
 
 ### 5.11 Parrilla de color (HU-14)
 

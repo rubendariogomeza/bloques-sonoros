@@ -46,6 +46,7 @@ Abrir la URL
          ├─ Construir con bloques → la línea barre y cada cuadro suena
          │    (parrilla: color = instrumento, fila = nota; pared vacía = silencio)
          ├─ En modo melodía, la forma de la estructura cambia la variación en el compás siguiente
+         ├─ En modo retrato, la cara más grande elige la canción y los gestos la modulan
          ├─ ⟳ Recalibrar rápido (sin cortar la música)
          ├─ Sonidos → kit + color → sample (o instrumentos afinados en parrilla)
          ├─ Ajustes → modo de juego, rejilla, sensibilidad, latencia, volumen, acentos
