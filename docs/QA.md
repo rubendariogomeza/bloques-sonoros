@@ -222,7 +222,7 @@ Estados: ✅ verificado · 🟡 parcial · ⬜ pendiente.
 | M-15 | Persistencia | Recargar tras cambiar BPM y rejilla | Ajustes y licencia se conservan | ✅ |
 | M-16 | Hojas con teclado | Tab dentro de la hoja; Escape | El foco queda atrapado y vuelve al botón de origen | ⬜ |
 | M-17 | Offline | Instalar PWA → modo avión → recargar | El shell abre y la licencia sigue activa | ⬜ |
-| M-18 | Actualización | Subir `VERSION` y recargar | Aviso “Versión nueva lista” | ⬜ |
+| M-18 | Actualización | Subir `VERSION` y recargar | Recarga automática a la versión nueva; en sesión en vivo, banner **Actualizar** | ⬜ |
 | M-19 | Cámara denegada | Bloquear el permiso y pulsar **Iniciar sesión musical** | Error accionable y opción de bloques virtuales | ⬜ |
 | M-20 | Demo vencida | Esperar 20 min o adelantar el reloj | Vuelve al bloqueo con mensaje de fin de prueba | ⬜ (no se esperó el tiempo completo) |
 | M-21 | Variación por silueta | En simulador, colocar bloques altos y luego extendidos | El chip del HUD cambia (`grave/medio/agudo`, `negras/corcheas`) al empezar el compás | ✅ |
@@ -392,7 +392,7 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | R-04 | Permiso de cámara denegado o no disponible (iOS) | Media | Alto | Mensaje accionable y simulador como respaldo; probar en iOS real | UX |
 | R-05 | Licencia local copiable | Alta | Bajo (negocio) | El servidor impide canjear dos veces; `verify` ata el dispositivo | PO |
 | R-06 | Fuga o pérdida del inventario de hashes | Baja | Alto | Solo hashes con pepper, copia de seguridad, permisos de archivo | PO/Tech |
-| R-07 | Service worker sirve una versión vieja | Media | Medio | Subir `VERSION` en cada release; aviso de actualización | Tech |
+| R-07 | Service worker sirve una versión vieja | Media | Medio | Subir `VERSION` en cada release; `updateViaCache: 'none'` y recarga automática al cambiar el controlador | Tech |
 | R-08 | Saturación de voces en torres grandes y BPM alto | Baja | Medio | Tope de 48 voces; descartar la nueva sin bloquear el audio | Audio |
 | R-09 | Pestaña oculta: rAF se detiene y la visión se congela | Media | Bajo | El audio sigue con lookahead ampliado; la visión se reanuda al volver | Tech |
 | R-10 | Accesibilidad incompleta (lector de pantalla, zoom) | Media | Medio | Foco atrapado, `aria-*`, `:focus-visible`; falta auditoría formal | UX/QA |

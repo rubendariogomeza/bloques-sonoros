@@ -32,7 +32,9 @@ git push origin master:main
 ```
 
 En 1–2 minutos GitHub Pages sirve la versión nueva. El service worker es cache-first: sube
-`VERSION` en `app/sw.js` en cada release para que los móviles no se queden con la copia vieja.
+`VERSION` en `app/sw.js` en cada release para que los móviles no se queden con la copia vieja. La
+app comprueba `sw.js` sin caché HTTP y se recarga sola al detectar la versión nueva (si hay una
+sesión en vivo, muestra **Actualizar** para no cortar la música).
 
 ## Modo prueba
 

@@ -457,5 +457,7 @@ frame ──► face.measure ──► piel ∩ primer plano ──► cara mayo
 - **Latencia:** 20 fps + lookahead de 120 ms; el disparo puede adelantarse hasta 120 ms.
 - **Calibración con cámara:** depende del rAF; si la pestaña está oculta, el timeout se extiende
   pero no calibra hasta que vuelva a ser visible.
-- **Service worker:** cache-first con revalidación; hay que subir `VERSION` en cada release.
+- **Service worker:** cache-first con revalidación; hay que subir `VERSION` en cada release. La
+  página se registra con `updateViaCache: 'none'` y se recarga sola cuando el controlador cambia
+  (en sesión en vivo pide confirmación con un banner).
 - **Samples personalizados:** el MVP usa síntesis; no hay carga de archivos del profesor.

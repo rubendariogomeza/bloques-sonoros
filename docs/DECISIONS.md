@@ -150,7 +150,10 @@ atrapados en una versión vieja.
 caché; assets cache-first con revalidación en segundo plano. `VERSION` se sube a mano.
 
 **Consecuencia:** offline inmediato y actualizaciones en la siguiente carga. Riesgo: olvidar
-subir `VERSION` deja una versión anterior en la primera visita tras publicar.
+subir `VERSION` deja una versión anterior en la primera visita tras publicar. Para no pedir al
+profesor que cierre la app, el cliente registra `sw.js` con `updateViaCache: 'none'` y recarga una
+sola vez cuando el nuevo worker toma el control; si está en sesión en vivo, muestra un banner
+**Actualizar** en lugar de cortar la clase.
 
 ---
 

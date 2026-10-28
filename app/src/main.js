@@ -1030,13 +1030,33 @@ async function boot() {
 
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloading = false;
+
+  // La versión nueva toma el control con skipWaiting + claim. Recargamos una
+  // sola vez para que el profesor no tenga que cerrar la app a mano.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    if (document.body.dataset.view === 'live') {
+      hud.banner('Versión nueva lista. Toca <b>Actualizar</b> para aplicarla.', {
+        kind: 'info',
+        action: { label: 'Actualizar', onClick: () => window.location.reload() },
+      });
+      return;
+    }
+    window.location.reload();
+  });
+
   try {
-    const registration = await navigator.serviceWorker.register('./sw.js');
+    // `updateViaCache: 'none'` evita que el navegador reutilice un sw.js cacheado.
+    const registration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+    registration.update().catch(() => {});
     registration.addEventListener('updatefound', () => {
       const worker = registration.installing;
       worker?.addEventListener('statechange', () => {
         if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-          hud.notify('Versión nueva lista. Cierra y abre la app para actualizar.', { timeout: 7000 });
+          hud.notify('Versión nueva lista. Actualizando…', { timeout: 4000 });
         }
       });
     });

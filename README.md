@@ -157,6 +157,7 @@ docs/                manifiesto, arquitectura, backlog, decisiones, QA y UX
 - Define `MT_PEPPER` y haz copia de `server/data/licenses.json`.
 - **Sube `VERSION` en `app/sw.js`** en cada despliegue: el service worker es cache-first y
   revalida en segundo plano, así que la primera carga tras publicar muestra la versión anterior.
+  La app comprueba `sw.js` sin caché y se recarga sola al detectar la versión nueva.
 - Sin backend, la app sigue funcionando offline con la licencia ya guardada; el canje inicial
   y la verificación necesitan red.
 

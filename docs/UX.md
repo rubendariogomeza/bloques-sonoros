@@ -372,7 +372,7 @@ producto, no decoración.
 | Kit en otro dispositivo | “Este kit ya está activado en otro dispositivo…” | Código del manual o soporte |
 | Código inválido | Error de checksum o “no existe” | El campo se selecciona para corregir |
 | Cambio de kit fallido | “No pudimos cargar el kit.” | Se conserva el kit anterior |
-| Versión nueva | “Versión nueva lista. Cierra y abre la app…” | Reabrir |
+| Versión nueva | “Versión nueva lista. Actualizando…” o banner **Actualizar** | Se recarga sola; en sesión en vivo, un toque |
 
 ## 11. Responsive y PWA
 
