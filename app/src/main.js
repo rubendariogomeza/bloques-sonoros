@@ -2,7 +2,7 @@
  * Punto de entrada de la PWA. Conecta licencia, cámara, visión, transporte,
  * audio y UI. Un único bucle de animación gobierna visión y overlay.
  */
-import { DEFAULTS, LIMITS, COLUMN_CHOICES, COLOR_CLASSES, COLOR_LABELS, STORAGE_KEYS, SWEEP_BEATS, TEST_MODE, GRID_ROWS, PLAY_MODES, PLAY_MODE_LABELS } from './core/config.js';
+import { DEFAULTS, LIMITS, COLUMN_CHOICES, COLOR_CLASSES, COLOR_LABELS, STORAGE_KEYS, SWEEP_BEATS, TEST_MODE, GRID_ROWS, PLAY_MODES, PLAY_MODE_LABELS, PORTRAIT } from './core/config.js';
 import { clamp } from './core/util.js';
 import { storage } from './platform/storage.js';
 import { createApiClient, redeemMessage } from './auth/api.js';
@@ -18,6 +18,7 @@ import { createMelodyPlayer, MELODY_SAMPLE_IDS } from './audio/melody.js';
 import { SAMPLE_BASE_MIDI } from './audio/synth.js';
 import { gridMidi } from './music/grid.js';
 import { BASE_INTENT, createIntentTracker, describeIntent } from './music/variation.js';
+import { createPortraitTracker, describePortrait, intentFromPortrait } from './music/portrait.js';
 import { KITS, KIT_IDS, GRID_KIT_ID, getKit, defaultMapping, sampleLabel, sanitizePitchedMapping } from './audio/kits.js';
 import { createOverlay } from './ui/overlay.js';
 import { createHud } from './ui/hud.js';
@@ -59,6 +60,7 @@ let redeeming = false;
 const live = {
   blocks: [],
   grid: null,
+  face: null,
   flashes: [],
   stats: null,
   progress: 0,
@@ -66,9 +68,12 @@ const live = {
   calibrating: false,
   mode: 'camera',
   intent: BASE_INTENT,
+  portraitSeed: null,
+  portraitIntent: null,
 };
 
 const intentTracker = createIntentTracker({ holdMs: 900 });
+const portraitTracker = createPortraitTracker({ holdMs: PORTRAIT.holdMs });
 const melody = createMelodyPlayer({ audio, stepsPerBar: settings.columns });
 
 const palette = [...COLOR_CLASSES];
@@ -97,6 +102,7 @@ function loadSettings() {
     metronome: Boolean(merged.metronome),
     playMode,
     accents: merged.accents !== false,
+    portraitConsent: Boolean(merged.portraitConsent),
     showStats: Boolean(merged.showStats),
     muted: Boolean(merged.muted),
     mappings: mappingStore,
@@ -126,7 +132,7 @@ function audioKitId() {
 
 /** Samples extra que el modo necesita además del kit cargado. */
 function extraSampleIds() {
-  return settings.playMode === 'melody' ? MELODY_SAMPLE_IDS : [];
+  return settings.playMode === 'melody' || settings.playMode === 'portrait' ? MELODY_SAMPLE_IDS : [];
 }
 
 /* ------------------------------------------------------------------------- */
@@ -184,10 +190,11 @@ async function startSession(mode = 'camera') {
     rows: GRID_ROWS,
     sensitivity: settings.sensitivity,
     fps: LIMITS.visionFps,
-    // La parrilla no necesita blobs ni silueta: se ahorra el etiquetado por frame.
-    trackBlobs: settings.playMode !== 'grid',
+    // Cada modo enciende solo los analizadores que necesita.
+    trackBlobs: settings.playMode === 'melody' || settings.playMode === 'blocks',
     trackStructure: settings.playMode === 'melody',
     trackGrid: settings.playMode === 'grid',
+    trackFace: settings.playMode === 'portrait',
   });
   engine.start();
 
@@ -197,10 +204,14 @@ async function startSession(mode = 'camera') {
   live.calibrating = false;
   live.blocks = [];
   live.grid = null;
+  live.face = null;
   live.flashes = [];
   live.progress = 0;
   live.intent = BASE_INTENT;
+  live.portraitSeed = null;
+  live.portraitIntent = null;
   intentTracker.reset();
+  portraitTracker.reset();
   melody.reset();
 
   transport.setColumns(settings.columns, audio.currentTime);
@@ -219,15 +230,23 @@ async function startSession(mode = 'camera') {
   document.body.dataset.view = 'live';
 
   if (session.mode === 'simulator') {
-    // El simulador arranca con la mesa vacía: un frame basta y no depende del rAF.
+    // El simulador arranca con la escena vacía: un frame basta y no depende del rAF.
+    const portraitMode = settings.playMode === 'portrait';
+    session.source.setScene?.(portraitMode ? 'face' : 'blocks');
+    session.source.showFace?.(false);
+    session.source.showBlocks?.(false);
     live.calibrated = session.engine.calibrateOnce();
-    source.seedDemo();
+    session.source.showFace?.(portraitMode);
+    session.source.showBlocks?.(!portraitMode);
+    if (!portraitMode) session.source.seedDemo();
     await play();
   } else {
-    hud.banner('Retira los bloques y toca <b>Calibrar</b> para que la app aprenda el fondo de la pared.', {
-      kind: 'warn',
-      action: { label: 'Calibrar ahora', onClick: () => calibrateNow() },
-    });
+    hud.banner(
+      settings.playMode === 'portrait'
+        ? 'Coloca el móvil frente a la persona y toca <b>Calibrar</b> con la escena vacía. La cámara no guarda ni envía caras.'
+        : 'Retira los bloques y toca <b>Calibrar</b> para que la app aprenda el fondo de la pared.',
+      { kind: 'warn', action: { label: 'Calibrar ahora', onClick: () => calibrateNow() } },
+    );
   }
 
   return { ok: true };
@@ -243,8 +262,11 @@ async function teardownSession() {
   session = null;
   live.blocks = [];
   live.grid = null;
+  live.face = null;
   live.flashes = [];
   live.stats = null;
+  live.portraitSeed = null;
+  live.portraitIntent = null;
   live.calibrated = false;
   live.calibrating = false;
   hud.clearBanner();
@@ -293,6 +315,12 @@ function handleStep({ column, time, pass }) {
 
   if (settings.playMode === 'grid') {
     handleGridStep({ column, when });
+    if (settings.metronome) audio.click(when);
+    return;
+  }
+
+  if (settings.playMode === 'portrait') {
+    handlePortraitStep({ column, when, pass });
     if (settings.metronome) audio.click(when);
     return;
   }
@@ -377,6 +405,33 @@ function handleGridStep({ column, when }) {
   if (live.flashes.length > 64) live.flashes.splice(0, live.flashes.length - 64);
 }
 
+/**
+ * Modo retrato: la cara más grande elige la canción. Sin cara no hay melodía
+ * (silencio, no melodía base) y la variación se fija al empezar el compás.
+ */
+function handlePortraitStep({ column, when, pass }) {
+  const face = live.face;
+  if (!face?.present) {
+    live.portraitIntent = null;
+    return;
+  }
+
+  if (column === 0) {
+    // Instantánea del gesto al inicio del compás: nunca cambia a mitad de nota.
+    live.portraitIntent = intentFromPortrait(live.portraitSeed ?? face.seed, face.cues);
+    melody.beginBar({ bar: pass, intent: live.portraitIntent, stepsPerBar: settings.columns });
+  }
+
+  const intent = live.portraitIntent;
+  if (!intent) return;
+  melody.playStep({ bar: pass, step: column, intent, stepsPerBar: settings.columns, when });
+
+  // El movimiento de la cabeza es un adorno: dos acentos por compás como máximo.
+  if (settings.accents && face.cues.motion > 0.35 && column % 2 === 0) {
+    melody.playAccent({ sampleId: 'chime', column, columns: settings.columns, when, gain: 0.18 });
+  }
+}
+
 /* ------------------------------------------------------------------------- */
 /* Calibración (HU-03 / HU-04 / HU-05)                                       */
 /* ------------------------------------------------------------------------- */
@@ -439,6 +494,17 @@ function startLoop() {
       live.calibrating = Boolean(result.calibrating);
       live.calibrated = Boolean(result.stats?.calibrated) && !result.calibrating;
       if (result.structure) live.intent = intentTracker.update(result.structure, ts);
+      if (result.face) {
+        live.face = result.face;
+        if (result.face.present) {
+          // La firma se confirma tras 900 ms estable; el gesto se lee en vivo.
+          live.portraitSeed = portraitTracker.update(result.face.seed, ts);
+          live.intent = intentFromPortrait(live.portraitSeed, result.face.cues);
+        } else {
+          live.portraitSeed = null;
+          live.intent = null;
+        }
+      }
     }
 
     live.progress = transport.progressAt(audio.currentTime);
@@ -449,6 +515,7 @@ function startLoop() {
       rows: GRID_ROWS,
       blocks: live.blocks,
       grid: live.grid,
+      face: live.face,
       playMode: settings.playMode,
       flashes: live.flashes,
       calibrated: live.calibrated,
@@ -492,22 +559,28 @@ function stateLabel() {
 
 function updateChrome() {
   const gridMode = settings.playMode === 'grid';
+  const portraitMode = settings.playMode === 'portrait';
   dock?.update({
     playing: Boolean(scheduler?.running),
     bpm: settings.bpm,
     muted: settings.muted,
     calibrated: live.calibrated,
     mode: live.mode,
+    playMode: settings.playMode,
   });
   hud.update({
     state: stateLabel(),
     bpm: settings.bpm,
-    blocks: gridMode ? (live.grid?.activeCount ?? 0) : live.blocks.length,
-    blocksLabel: gridMode ? 'Celdas' : 'Bloques',
+    blocks: gridMode ? (live.grid?.activeCount ?? 0) : portraitMode ? (live.face?.present ? 1 : 0) : live.blocks.length,
+    blocksLabel: gridMode ? 'Celdas' : portraitMode ? 'Rostros' : 'Bloques',
     fps: live.stats?.fps ?? 0,
     mode: live.mode,
     showStats: settings.showStats,
-    variation: settings.playMode === 'melody' ? describeIntent(live.intent) : null,
+    variation: portraitMode
+      ? describePortrait(live.portraitIntent ?? live.intent)
+      : settings.playMode === 'melody'
+        ? describeIntent(live.intent)
+        : null,
   });
 }
 
@@ -570,19 +643,50 @@ async function ensureAudioForMode() {
 
 function setPlayMode(mode) {
   if (!PLAY_MODES.includes(mode) || mode === settings.playMode) return;
+  if (mode === 'portrait' && !settings.portraitConsent) {
+    hud.notify('Antes de usar Retrato, acepta el aviso de privacidad en Ajustes.', { kind: 'error' });
+    return;
+  }
   settings.playMode = mode;
   melody.reset();
   intentTracker.reset();
-  live.intent = BASE_INTENT;
+  portraitTracker.reset();
+  live.intent = mode === 'portrait' ? null : BASE_INTENT;
+  live.portraitSeed = null;
+  live.portraitIntent = null;
+  live.face = null;
+  live.flashes = [];
   session?.engine.setTrackers({
-    blobs: mode !== 'grid',
+    blobs: mode === 'melody' || mode === 'blocks',
     structure: mode === 'melody',
     grid: mode === 'grid',
+    face: mode === 'portrait',
   });
+  if (session?.mode === 'simulator') {
+    // Cambiar de escena cambia el fondo: se recalibra con la escena vacía para
+    // que los bloques o la cara vuelvan a ser primer plano.
+    const portraitMode = mode === 'portrait';
+    session.source.setScene?.(portraitMode ? 'face' : 'blocks');
+    session.source.showFace?.(false);
+    session.source.showBlocks?.(false);
+    live.calibrated = session.engine.calibrateOnce();
+    session.source.showFace?.(portraitMode);
+    session.source.showBlocks?.(!portraitMode);
+  }
   saveSettings();
   updateChrome();
   ensureAudioForMode();
   hud.notify(`Modo ${PLAY_MODE_LABELS[mode]}`, { timeout: 1800 });
+}
+
+/** Consentimiento explícito para procesar caras; vive en el dispositivo. */
+function setPortraitConsent(value) {
+  settings.portraitConsent = Boolean(value);
+  saveSettings();
+  if (!settings.portraitConsent && settings.playMode === 'portrait') {
+    setPlayMode('grid');
+    hud.notify('Retrato desactivado. Volvemos a la parrilla.', { kind: 'info' });
+  }
 }
 
 function setAccents(value) {
@@ -786,6 +890,11 @@ stage.addEventListener('pointerdown', (event) => {
   // El primer toque tras el reposo solo devuelve los controles: no debe colocar un bloque.
   if (document.body.classList.contains('is-idle')) return;
   if (!session || session.mode !== 'simulator') return;
+  if (settings.playMode === 'portrait') {
+    // Sin cámara, tocar la escena cambia de cara para probar otra canción.
+    session.source.cycleFace?.();
+    return;
+  }
   const rect = stage.getBoundingClientRect();
   const point = stageToSource((event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height);
   if (session.source.removeAt(point.x, point.y)) {
@@ -835,6 +944,7 @@ const handlers = {
       metronome: settings.metronome,
       playMode: settings.playMode,
       accents: settings.accents,
+      portraitConsent: settings.portraitConsent,
       showStats: settings.showStats,
       mode: live.mode,
       cameraAllowed: license.features().camera,
@@ -855,6 +965,7 @@ const handlers = {
   onVolume: (value) => setVolume(value),
   onMetronome: (value) => setMetronome(value),
   onPlayMode: (mode) => setPlayMode(mode),
+  onPortraitConsent: (value) => setPortraitConsent(value),
   onAccents: (value) => setAccents(value),
   onStats: (value) => setStats(value),
   onMode: (mode) => changeMode(mode),

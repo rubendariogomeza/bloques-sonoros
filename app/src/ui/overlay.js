@@ -189,8 +189,68 @@ export function createOverlay(canvas) {
   }
 
   /**
+   * Retrato: caja del rostro, línea de ojos y boca. Es feedback para el
+   * profesor, no un reconocimiento: solo se dibuja mientras hay una cara.
+   */
+  function drawFaceOverlay(face) {
+    if (!face) return;
+    const { width, height } = view;
+    if (!face.present) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+      ctx.font = '600 15px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Buscando un rostro…', width / 2, height * 0.52);
+      ctx.restore();
+      return;
+    }
+
+    const x = face.x * width;
+    const y = face.y * height;
+    const w = face.w * width;
+    const h = face.h * height;
+    const accent = '#ffd166';
+    const clamp01 = (value) => Math.min(1, Math.max(0, Number(value) || 0));
+
+    ctx.save();
+    ctx.globalAlpha = face.stale ? 0.5 : 1;
+    ctx.strokeStyle = hexToRgba(accent, 0.9);
+    ctx.lineWidth = 2;
+    ctx.shadowColor = hexToRgba(accent, 0.55);
+    ctx.shadowBlur = 16;
+    roundRect(ctx, x, y, w, h, Math.min(w, h) * 0.18);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = hexToRgba(accent, 0.42);
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, y + h * 0.55, w * 0.4, h * 0.45, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Ojos: dos puntos a la altura y separación medidas.
+    const eyeY = y + clamp01(face.eyes.line) * h;
+    const eyeDx = (w * clamp01(face.eyes.distance)) / 2;
+    ctx.fillStyle = hexToRgba(accent, 0.85);
+    for (const dir of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(x + w / 2 + dir * eyeDx, eyeY, Math.max(2.5, w * 0.035), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Boca: el ancho y la apertura siguen la expresión.
+    const mouthW = w * clamp01(face.mouth.width);
+    const mouthH = h * (0.014 + clamp01(face.mouth.open) * 0.07);
+    ctx.strokeStyle = hexToRgba(accent, 0.8);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, y + h * 0.74, Math.max(3, mouthW / 2), Math.max(2, mouthH / 2), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
    * @param {{source?:any, progress:number, columns:number, rows:number, blocks:Array,
-   *          flashes:Array, grid?:any, playMode?:string, calibrated:boolean,
+   *          flashes:Array, grid?:any, face?:any, playMode?:string, calibrated:boolean,
    *          running:boolean, now:number}} frame
    */
   function draw(frame) {
@@ -202,6 +262,7 @@ export function createOverlay(canvas) {
       blocks = [],
       flashes = [],
       grid = null,
+      face = null,
       playMode = 'grid',
       calibrated = true,
       running = true,
@@ -217,13 +278,15 @@ export function createOverlay(canvas) {
     }
 
     const gridMode = playMode === 'grid';
+    const portraitMode = playMode === 'portrait';
     drawGrid(columns, rows, running ? Math.floor(progress * columns) % columns : -1, gridMode);
     if (!calibrated) {
       ctx.fillStyle = 'rgba(6, 5, 11, 0.42)';
       ctx.fillRect(0, 0, view.width, view.height);
     }
     if (gridMode) drawCells(grid);
-    else drawBlocks(blocks, columns);
+    else if (!portraitMode) drawBlocks(blocks, columns);
+    if (portraitMode) drawFaceOverlay(face);
     if (running) drawSweep(progress);
     if (!reducedMotion) drawFlashes(flashes, columns, now);
     drawVignette();

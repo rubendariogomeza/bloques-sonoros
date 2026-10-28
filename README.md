@@ -4,9 +4,10 @@ PWA educativa en la que los bloques físicos colocados sobre una pared se convie
 La escena se divide en una **parrilla de 8 filas**: una línea de lectura barre el área de
 izquierda a derecha y, al cruzar cada bloque, suena el instrumento de su color en la nota de su
 fila. Una pared vacía es silencio total y cualquier combinación cae en la pentatónica de Do, así
-que el niño compone sin poder desafinar. La melodía reactiva a la forma de la estructura y el
-modo bloque → sonido siguen disponibles como alternativas. Todo el video y el audio se procesan
-en el navegador: **ningún frame sale del dispositivo**.
+que el niño compone sin poder desafinar. La melodía reactiva a la forma de la estructura, el
+**retrato sonoro** (una cara → una canción) y el modo bloque → sonido siguen disponibles como
+alternativas. Todo el video y el audio se procesan en el navegador: **ningún frame sale del
+dispositivo**.
 
 - **Profesor:** calibra el fondo, elige modo de juego y kit de sonidos, ajusta BPM, sensibilidad
   y volumen.
@@ -39,7 +40,9 @@ Escríbelo o escanéalo en la pantalla de bloqueo. Si prefieres no gastar un có
 El simulador dibuja una pared con bloques y atraviesa exactamente el mismo pipeline de visión que
 la cámara (fondo, máscara, morfología, parrilla, silueta, blobs, capas, columnas). Al mover los
 bloques, cada cuadro suena con su instrumento y su nota; en modo melodía, la forma cambia el
-registro, la densidad o el instrumento en el compás siguiente.
+registro, la densidad o el instrumento en el compás siguiente. En modo **Retrato** el simulador
+cambia a una escena con una cara sintética: tocar la escena pasa a la siguiente cara y cada una
+tiene su propia canción.
 
 ## Modo prueba (sin QR)
 
@@ -73,7 +76,7 @@ Se actualiza con cada push a `main` y no depende de ninguna computadora encendid
 | Comando | Para qué |
 | --- | --- |
 | `npm start` | App + API de licencias en `http://localhost:4173`. |
-| `npm test` | Suite completa (`node --test`, 113 pruebas). |
+| `npm test` | Suite completa (`node --test`, 129 pruebas). |
 | `npm run tokens -- --count 25 --label lote-septiembre` | Genera códigos de un solo uso. |
 | `npm run tokens -- --count 5 --out server/data/lote.txt` | Los guarda en un archivo para imprimir. |
 
@@ -92,8 +95,10 @@ Variables de entorno del servidor:
    deja arrancar el motor de audio.
 3. **Calibra** con la pared vacía. La app aprende el fondo.
 4. Construye con bloques. La línea de barrido recorre el área: cada bloque suena con el
-   instrumento de su color y la nota de su fila (modo **Parrilla**, el de fábrica). En **Melodía**,
+   instrumento de su color y la nota de su fila (modo **Parrilla**, el modo de fábrica). En **Melodía**,
    la forma de la estructura cambia la variación en el compás siguiente (el chip del HUD dice cuál).
+   En **Retrato**, la cara más grande elige la canción y los gestos la modulan; sin cara no suena
+   nada.
 5. Si la cámara se mueve, **⟳ Recalibrar rápido** compensa el desplazamiento sin parar la música.
 6. **Sonidos** reasigna color → sample (en parrilla, solo instrumentos afinados); **Ajustes** cambia
    modo de juego, rejilla (8/12/16/24), sensibilidad, latencia, volumen, metrónomo y acentos.
@@ -109,9 +114,9 @@ app/                 PWA estática (ES modules nativos, sin build)
   src/core/          config y utilidades puras
   src/platform/      localStorage
   src/auth/          token, API, licencia, escáner QR
-  src/vision/        cámara → máscara → parrilla/silueta → blobs → capas → columnas
+  src/vision/        cámara → máscara → parrilla/silueta/cara → blobs → capas → columnas
   src/sequencer/     transporte (matemática pura) + scheduler (lookahead)
-  src/music/         canción pentatónica, silueta → variación y fila → nota
+  src/music/         canción pentatónica, silueta → variación, fila → nota y rostro → canción
   src/audio/         samples sintetizados, kits, motor de voces y melodía
   src/ui/            overlay, HUD, dock, hojas y pantallas
 server/              estático + API de licencias (solo stdlib)
@@ -124,8 +129,8 @@ docs/                manifiesto, arquitectura, backlog, decisiones, QA y UX
 1. **Visión (20 fps):** el frame se reduce a 320 px de ancho, se compara con un modelo de fondo
    por píxel (luma + cromaticidad + saturación), se umbraliza con histéresis y se limpia con
    morfología 3×3. Sobre la máscara se mide la **parrilla** (ocupación y color dominante por
-   cuadro) y la **silueta** (ocupación, altura, base, color, simetría); los blobs se reservan para
-   el HUD y los destellos.
+   cuadro), la **silueta** (ocupación, altura, base, color, simetría) o la **cara** (piel YCbCr ∩
+   primer plano); los blobs se reservan para el HUD y los destellos.
 2. **Iluminación:** un factor global estimado por histograma corrige la exposición; el fondo
    guarda reflectancia, no brillo. Las sombras (mismo matiz, más oscuras) se descartan.
 3. **Recalibración en caliente:** se estima la traslación de la cámara con los perfiles de
@@ -134,7 +139,9 @@ docs/                manifiesto, arquitectura, backlog, decisiones, QA y UX
    y su fila un grado pentatónico con la escalera centrada en la nota natural del timbre; sin
    bloques no hay notas. En **Melodía**, una melodía pentatónica en Do con progresión I–V–vi–IV:
    la silueta elige registro, densidad, timbre, bajo y adorno, y el cambio se aplica al empezar el
-   compás tras 0,9 s de forma estable. Toda nota pertenece a la escala o al acorde: no puede
+   compás tras 0,9 s de forma estable. En **Retrato**, la cara más grande elige una canción propia
+   (registro, densidad, timbre, bajo, adorno y contorno) y los gestos la modulan al empezar el
+   compás; sin cara no hay música. Toda nota pertenece a la escala o al acorde: no puede
    desafinar.
 5. **Tiempo:** el transporte es una recta anclada a `AudioContext.currentTime`; el scheduler
    programa con 120 ms de lookahead (1,6 s en segundo plano). Cambiar BPM reancla sin saltar.
@@ -166,6 +173,9 @@ docs/                manifiesto, arquitectura, backlog, decisiones, QA y UX
 - En **Parrilla** un bloque ancho suena una vez por columna y una torre del mismo color suena una
   sola nota; el contraste con la pared importa (blanco sobre blanco puede no detectarse).
 - Las piezas que se tocan se fusionan en un solo blob; es intencionado (ver `docs/DECISIONS.md`).
+- En **Retrato** solo se sigue la cara más grande, sin estimación de pose: un perfil muy girado
+  puede no detectarse y entonces no suena nada (no hay melodía de fondo). La firma del rostro es
+  efímera: vive en memoria y se borra al cerrar la sesión.
 - El registro más grave de la marimba suena apagado; pendiente de ajuste de timbre.
 
 ## Documentación

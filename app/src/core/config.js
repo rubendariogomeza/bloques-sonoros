@@ -33,13 +33,33 @@ export const SWEEP_BEATS = 4;
  */
 export const GRID_ROWS = 8;
 
-/** Modos de juego. La parrilla manda; los otros dos quedan como alternativas. */
-export const PLAY_MODES = Object.freeze(['grid', 'melody', 'blocks']);
+/**
+ * Modos de juego. La parrilla manda; Retrato es el cuarto modo y los otros dos
+ * quedan como alternativas.
+ */
+export const PLAY_MODES = Object.freeze(['grid', 'portrait', 'melody', 'blocks']);
 
 export const PLAY_MODE_LABELS = Object.freeze({
   grid: 'Parrilla',
+  portrait: 'Retrato',
   melody: 'Melodía',
   blocks: 'Bloques',
+});
+
+/**
+ * Retrato sonoro: la cara más grande de la escena elige una canción estable a
+ * partir de rasgos agregados (tono de piel, pelo, proporción, línea de ojos).
+ * La firma vive solo en memoria: no se guarda ni se envía.
+ */
+export const PORTRAIT = Object.freeze({
+  holdMs: 900,
+  minArea: 0.012,
+  maxArea: 0.5,
+  minFill: 0.35,
+  minAspect: 0.55,
+  maxAspect: 1.75,
+  confirmHits: 2,
+  ttlMs: 300,
 });
 
 export const LIMITS = Object.freeze({
@@ -65,6 +85,8 @@ export const DEFAULTS = Object.freeze({
   inputOffsetMs: 0,
   /** `grid`: cada cuadro suena con el instrumento de su color. */
   playMode: 'grid',
+  /** Consentimiento explícito para procesar caras (solo en el dispositivo). */
+  portraitConsent: false,
   /** Acentos suaves al cruzar bloques (solo en el modo melodía). */
   accents: true,
   /** Reproducir un clic de referencia al iniciar cada barrido. */

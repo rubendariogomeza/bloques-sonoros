@@ -926,6 +926,42 @@ p {
   color: var(--text);
 }
 
+/* Cuatro modos de juego: en pantallas estrechas se reparten en dos filas. */
+.segmented {
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 430px) {
+  .segmented {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.consent {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 209, 102, 0.45);
+  background: rgba(255, 209, 102, 0.08);
+}
+
+.consent[hidden] {
+  display: none;
+}
+
+.consent__title {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.consent__text {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
 .switch {
   display: flex;
   align-items: center;

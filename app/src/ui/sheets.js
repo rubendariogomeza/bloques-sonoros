@@ -1,5 +1,5 @@
 /** Hojas modales: kits de sonido, ajustes y ayuda. */
-import { COLOR_CLASSES, COLOR_HEX, COLOR_LABELS, COLUMN_CHOICES, PLAY_MODE_LABELS, APP } from '../core/config.js';
+import { COLOR_CLASSES, COLOR_HEX, COLOR_LABELS, COLUMN_CHOICES, PLAY_MODES, PLAY_MODE_LABELS, APP } from '../core/config.js';
 import { KITS, SAMPLE_OPTIONS, PITCHED_SAMPLE_OPTIONS } from '../audio/kits.js';
 import { el, clear, setPressed } from './dom.js';
 
@@ -63,6 +63,7 @@ export function createSheets({ root, handlers }) {
   }
 
   function openKits(state) {
+    if (state.playMode === 'portrait') return openPortraitSounds();
     const gridMode = state.playMode === 'grid';
     const options = gridMode ? PITCHED_SAMPLE_OPTIONS : SAMPLE_OPTIONS;
     const kitList = el('div', { class: 'kits' });
@@ -171,6 +172,38 @@ export function createSheets({ root, handlers }) {
     };
   }
 
+  /** Retrato no usa el kit de bloques: su paleta es fija y armónica. */
+  function openPortraitSounds() {
+    const node = el(
+      'section',
+      { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Sonidos de Retrato' },
+      [
+        head('Sonidos de Retrato'),
+        el('div', { class: 'sheet__body' }, [
+          el('p', {
+            class: 'setting__hint',
+            text: 'Retrato no usa el kit de bloques. Cada rostro elige su propia combinación entre marimba, campana y pizzicato, con registro, densidad, bajo y adorno.',
+          }),
+          el('ul', { class: 'muted', style: { lineHeight: '1.7', paddingLeft: '18px' } }, [
+            el('li', { text: 'Rasgos del rostro (tono de piel, pelo, proporción, ojos) → canción estable.' }),
+            el('li', { text: 'Boca abierta → más notas. Sonrisa → adorno. Ojos cerrados → registro grave.' }),
+            el('li', { text: 'Mover la cabeza añade acentos suaves, siempre en la escala.' }),
+            el('li', { text: 'Sin cara en cámara no suena nada: no hay melodía de fondo.' }),
+          ]),
+          el('p', {
+            class: 'setting__hint',
+            text: 'Todo se procesa en este dispositivo. La cámara no guarda ni envía caras y la firma se borra al cerrar la sesión.',
+          }),
+        ]),
+        el('div', { class: 'sheet__foot' }, [
+          el('button', { class: 'btn btn--wide', type: 'button', 'data-close': true }, ['Entendido']),
+        ]),
+      ],
+    );
+    open(node);
+    return { refresh() {} };
+  }
+
   function openSettings(state) {
     const columnsValue = el('span', { class: 'setting__value', text: String(state.columns) });
     const columnsGroup = el('div', { class: 'segmented', 'data-el': 'columns' });
@@ -254,18 +287,66 @@ export function createSheets({ root, handlers }) {
 
     const playModeGroup = el('div', { class: 'segmented' });
     const playModeButtons = [];
-    for (const value of ['grid', 'melody', 'blocks']) {
+    let pendingMode = null;
+
+    const consentBox = el('div', { class: 'consent', hidden: true }, [
+      el('p', { class: 'consent__title', text: 'Retrato sonoro' }),
+      el('p', {
+        class: 'consent__text',
+        text: 'La cámara mirará la cara más grande de la escena para elegir la canción. Todo se procesa en este dispositivo: no se guarda, no se envía y no identifica a nadie. La firma se borra al cerrar la sesión.',
+      }),
+      el('div', { class: 'dock__group' }, [
+        el(
+          'button',
+          {
+            class: 'btn btn--ghost btn--sm',
+            type: 'button',
+            onclick: () => {
+              pendingMode = null;
+              consentBox.hidden = true;
+            },
+          },
+          ['Ahora no'],
+        ),
+        el(
+          'button',
+          {
+            class: 'btn btn--sm',
+            type: 'button',
+            onclick: () => {
+              state.portraitConsent = true;
+              handlers.onPortraitConsent(true);
+              consentBox.hidden = true;
+              const target = pendingMode;
+              pendingMode = null;
+              if (target) applyPlayMode(target);
+            },
+          },
+          ['Activar Retrato'],
+        ),
+      ]),
+    ]);
+
+    function applyPlayMode(value) {
+      state.playMode = value;
+      handlers.onPlayMode(value);
+      playModeButtons.forEach((item, index) => setPressed(item, PLAY_MODES[index] === value));
+    }
+
+    for (const value of PLAY_MODES) {
       const button = el('button', {
         type: 'button',
         text: PLAY_MODE_LABELS[value],
         'aria-pressed': String(state.playMode === value),
         onclick: () => {
           if (state.playMode === value) return;
-          state.playMode = value;
-          handlers.onPlayMode(value);
-          playModeButtons.forEach((item, index) =>
-            setPressed(item, ['grid', 'melody', 'blocks'][index] === value),
-          );
+          if (value === 'portrait' && !state.portraitConsent) {
+            pendingMode = value;
+            consentBox.hidden = false;
+            consentBox.scrollIntoView?.({ block: 'nearest' });
+            return;
+          }
+          applyPlayMode(value);
         },
       });
       playModeButtons.push(button);
@@ -278,9 +359,10 @@ export function createSheets({ root, handlers }) {
         el('div', { class: 'setting' }, [
           el('div', { class: 'setting__head' }, [el('div', { class: 'setting__label', text: 'Modo de juego' })]),
           playModeGroup,
+          consentBox,
           el('div', {
             class: 'setting__hint',
-            text: 'Parrilla: cada cuadro suena con el instrumento de su color; pared vacía, silencio. Melodía: la forma de la estructura cambia la canción. Bloques: cada color dispara su sonido.',
+            text: 'Parrilla: cada cuadro suena con el instrumento de su color; pared vacía, silencio. Retrato: la cara más grande elige una canción propia y sin cara no suena nada. Melodía: la forma de la estructura cambia la canción. Bloques: cada color dispara su sonido.',
           }),
         ]),
         el('div', { class: 'setting' }, [
@@ -319,7 +401,7 @@ export function createSheets({ root, handlers }) {
         }),
         toggle({
           label: 'Acentos de los bloques',
-          hint: 'Solo en el modo melodía: un toque suave al cruzar un bloque, siempre dentro de la escala.',
+          hint: 'En Melodía y Retrato: un toque suave al cruzar un bloque o mover la cabeza, siempre dentro de la escala.',
           checked: state.accents,
           onChange: (checked) => handlers.onAccents(checked),
         }),
@@ -387,7 +469,7 @@ export function createSheets({ root, handlers }) {
           el('li', { text: 'Con la pared vacía no suena nada. Cada bloque que colocas enciende su cuadro: el color elige el instrumento y la fila, la nota.' }),
           el('li', { text: 'La línea recorre las columnas y hace sonar los cuadros ocupados. Varios bloques en la misma columna suenan juntos, como un acorde.' }),
           el('li', { text: 'Si la cámara se mueve, toca ⟳ para recalibrar sin cortar la música.' }),
-          el('li', { text: 'En Ajustes puedes cambiar a los modos Melodía o Bloques si quieres otra forma de jugar.' }),
+          el('li', { text: 'En Ajustes puedes cambiar entre Parrilla, Retrato, Melodía y Bloques. Retrato necesita el consentimiento del profesor: la cámara no guarda ni envía caras.' }),
         ]),
         el('p', { class: 'fineprint', text: 'Los niños solo tocan los bloques: el feedback es el sonido.' }),
       ]),

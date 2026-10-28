@@ -10,6 +10,20 @@ import { clamp } from '../core/util.js';
 
 const PALETTE = Object.keys(COLOR_HEX);
 
+/**
+ * Caras sintéticas para probar Retrato sin cámara. Cada preset cambia piel,
+ * pelo y proporciones: el mismo pipeline que la cámara debe producir otra
+ * semilla y, por tanto, otra canción.
+ */
+const FACES = Object.freeze([
+  Object.freeze({ skin: '#e8bea0', skinLight: '#f4d6bd', hair: '#2b1b12', brow: '#3a2418', eye: '#2a1d16', mouth: '#8d3440', aspect: 0.82, eyeGap: 0.2, lip: 1 }),
+  Object.freeze({ skin: '#c08a63', skinLight: '#d7a67f', hair: '#171310', brow: '#241a13', eye: '#1c1512', mouth: '#7c2b34', aspect: 0.92, eyeGap: 0.23, lip: 0.9 }),
+  Object.freeze({ skin: '#6e4b37', skinLight: '#8a6148', hair: '#0f0b09', brow: '#1b1310', eye: '#140f0d', mouth: '#6a2530', aspect: 0.78, eyeGap: 0.19, lip: 1.1 }),
+  Object.freeze({ skin: '#f0cbaa', skinLight: '#fbe4cb', hair: '#c9922f', brow: '#8f6520', eye: '#3a2a1c', mouth: '#a04a52', aspect: 0.74, eyeGap: 0.21, lip: 0.85 }),
+  Object.freeze({ skin: '#8a5a3c', skinLight: '#a87452', hair: '#3b2a1a', brow: '#2a1d12', eye: '#1a120e', mouth: '#73272f', aspect: 0.96, eyeGap: 0.24, lip: 1 }),
+  Object.freeze({ skin: '#d9a98a', skinLight: '#ecc4a8', hair: '#5b3a24', brow: '#3f2718', eye: '#241812', mouth: '#8a3a44', aspect: 0.86, eyeGap: 0.22, lip: 0.95 }),
+]);
+
 function shade(hex, amount) {
   const value = Number.parseInt(hex.slice(1), 16);
   const r = clamp(((value >> 16) & 255) + amount, 0, 255);
@@ -29,8 +43,19 @@ export function createSimulator({ width = 640, height = 480, columns = 16 } = {}
   backdrop.height = height;
   drawBackdrop(backdrop.getContext('2d'));
 
+  // Pared neutra para el modo retrato: fondo liso, sin textura que parezca piel.
+  const wall = document.createElement('canvas');
+  wall.width = width;
+  wall.height = height;
+  drawWall(wall.getContext('2d'));
+
   /** @type {Array<{column:number, y:number, color:string, size:number}>} */
   let blocks = [];
+  let scene = 'blocks';
+  let faceVisible = true;
+  let blocksVisible = true;
+  let faceIndex = 0;
+  let facePhase = 0;
   let lightPhase = 0;
   let lightDrift = 0.16;
 
@@ -74,6 +99,23 @@ export function createSimulator({ width = 640, height = 480, columns = 16 } = {}
     vignette.addColorStop(1, 'rgba(40,22,8,0.35)');
     target.fillStyle = vignette;
     target.fillRect(0, 0, width, height);
+  }
+
+  function drawWall(target) {
+    const gradient = target.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, '#d5d2cc');
+    gradient.addColorStop(0.6, '#c9c6c0');
+    gradient.addColorStop(1, '#b9b6b0');
+    target.fillStyle = gradient;
+    target.fillRect(0, 0, width, height);
+
+    // Junta de baldosas: una línea tenue, no una textura que parezca un objeto.
+    target.strokeStyle = 'rgba(120, 116, 110, 0.25)';
+    target.lineWidth = 2;
+    target.beginPath();
+    target.moveTo(0, height * 0.78);
+    target.lineTo(width, height * 0.78);
+    target.stroke();
   }
 
   function blockRect(block) {
@@ -121,10 +163,110 @@ export function createSimulator({ width = 640, height = 480, columns = 16 } = {}
     target.closePath();
   }
 
+  function ellipse(target, x, y, rx, ry) {
+    target.beginPath();
+    target.ellipse(x, y, Math.max(0.5, rx), Math.max(0.5, ry), 0, 0, Math.PI * 2);
+  }
+
+  /** Expresión animada y suave: la música la lee al empezar cada compás. */
+  function expression() {
+    const t = facePhase;
+    const blink = Math.sin(t * 1.7) > 0.985 ? 0.12 : 1;
+    return {
+      mouthOpen: 0.2 + 0.45 * (0.5 + 0.5 * Math.sin(t * 0.9)),
+      smile: 0.25 + 0.65 * (0.5 + 0.5 * Math.sin(t * 0.31 + 1.2)),
+      eyesOpen: blink,
+      tilt: Math.sin(t * 0.21) * 0.7,
+    };
+  }
+
+  function drawFace(expr) {
+    const preset = FACES[faceIndex % FACES.length];
+    const cx = width * 0.5;
+    const cy = height * 0.52;
+    const faceH = height * 0.6;
+    const faceW = faceH * preset.aspect;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(expr.tilt * 0.07);
+
+    // Pelo: un óvalo algo mayor detrás de la cara.
+    ctx.fillStyle = preset.hair;
+    ellipse(ctx, 0, -faceH * 0.03, faceW * 0.56, faceH * 0.56);
+    ctx.fill();
+
+    // Cara.
+    const skin = ctx.createRadialGradient(-faceW * 0.12, -faceH * 0.14, faceW * 0.08, 0, 0, faceW * 0.72);
+    skin.addColorStop(0, preset.skinLight);
+    skin.addColorStop(1, preset.skin);
+    ctx.fillStyle = skin;
+    ellipse(ctx, 0, faceH * 0.05, faceW * 0.5, faceH * 0.5);
+    ctx.fill();
+
+    // Orejas.
+    ctx.fillStyle = preset.skin;
+    for (const dir of [-1, 1]) {
+      ellipse(ctx, dir * faceW * 0.49, faceH * 0.06, faceW * 0.06, faceH * 0.1);
+      ctx.fill();
+    }
+
+    // Ojos: esclerótica clara y pupila oscura (lo que mide la heurística).
+    const eyeY = -faceH * 0.06;
+    const eyeDx = faceW * preset.eyeGap;
+    const eyeRx = faceW * 0.105;
+    const eyeRy = Math.max(1.5, faceH * 0.055 * expr.eyesOpen);
+    for (const dir of [-1, 1]) {
+      ctx.fillStyle = '#f7f2ec';
+      ellipse(ctx, dir * eyeDx, eyeY, eyeRx, eyeRy);
+      ctx.fill();
+      ctx.fillStyle = preset.eye;
+      ellipse(ctx, dir * eyeDx, eyeY, eyeRx * 0.44, Math.max(1.2, eyeRy * 0.9));
+      ctx.fill();
+    }
+
+    // Cejas.
+    ctx.strokeStyle = preset.brow;
+    ctx.lineWidth = Math.max(2, faceH * 0.016);
+    ctx.lineCap = 'round';
+    for (const dir of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(dir * eyeDx - eyeRx * 0.9, eyeY - faceH * 0.1);
+      ctx.quadraticCurveTo(dir * eyeDx, eyeY - faceH * 0.13, dir * eyeDx + eyeRx * 0.9, eyeY - faceH * 0.09);
+      ctx.stroke();
+    }
+
+    // Nariz: una sombra suave, sin contorno duro.
+    ctx.fillStyle = 'rgba(60, 32, 20, 0.16)';
+    ellipse(ctx, 0, faceH * 0.1, faceW * 0.055, faceH * 0.035);
+    ctx.fill();
+
+    // Boca: ancho y apertura cambian con el gesto; la sonrisa levanta las comisuras.
+    const mouthW = faceW * 0.36;
+    const mouthY = faceH * 0.24;
+    const mouthH = Math.max(2, faceH * (0.012 + expr.mouthOpen * 0.085));
+    ctx.fillStyle = preset.mouth;
+    ellipse(ctx, 0, mouthY, mouthW / 2, mouthH / 2);
+    ctx.fill();
+    if (expr.smile > 0.45) {
+      const lift = (expr.smile - 0.45) * faceH * 0.09;
+      for (const dir of [-1, 1]) {
+        ellipse(ctx, dir * mouthW * 0.5, mouthY - lift, mouthW * 0.07, Math.max(1.5, mouthH * 0.32));
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
+  }
+
   function render() {
-    ctx.drawImage(backdrop, 0, 0);
-    const sorted = [...blocks].sort((a, b) => a.y - b.y);
-    for (const block of sorted) drawBlock(block);
+    ctx.drawImage(scene === 'face' ? wall : backdrop, 0, 0);
+    if (scene === 'face') {
+      if (faceVisible) drawFace(expression());
+    } else if (blocksVisible) {
+      const sorted = [...blocks].sort((a, b) => a.y - b.y);
+      for (const block of sorted) drawBlock(block);
+    }
 
     // Deriva de iluminación (simula nubes o fluorescentes calentando).
     const level = Math.sin(lightPhase) * lightDrift;
@@ -198,7 +340,32 @@ export function createSimulator({ width = 640, height = 480, columns = 16 } = {}
 
   function tick(dtMs) {
     lightPhase += dtMs / 1000 / 6;
+    if (scene === 'face') facePhase += dtMs / 1000;
     render();
+  }
+
+  /** Cambia entre la mesa de bloques y la pared con una cara. */
+  function setScene(next) {
+    scene = next === 'face' ? 'face' : 'blocks';
+    render();
+  }
+
+  function showFace(visible) {
+    faceVisible = Boolean(visible);
+    render();
+  }
+
+  function showBlocks(visible) {
+    blocksVisible = Boolean(visible);
+    render();
+  }
+
+  /** Siguiente cara sintética: otra piel, otro pelo y otra canción. */
+  function cycleFace() {
+    faceIndex = (faceIndex + 1) % FACES.length;
+    facePhase = 0;
+    render();
+    return faceIndex;
   }
 
   function setLightDrift(value) {
@@ -240,11 +407,21 @@ export function createSimulator({ width = 640, height = 480, columns = 16 } = {}
     seedDemo,
     tick,
     render,
+    setScene,
+    showFace,
+    showBlocks,
+    cycleFace,
     setLightDrift,
     setColumns,
     dispose,
     get blocks() {
       return blocks.map((block) => ({ ...block }));
+    },
+    get faceIndex() {
+      return faceIndex;
+    },
+    get scene() {
+      return scene;
     },
   };
 }

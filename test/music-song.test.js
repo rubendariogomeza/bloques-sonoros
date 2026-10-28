@@ -19,7 +19,9 @@ function allIntents() {
       for (const timbre of [0, 1, 2]) {
         for (const bass of [false, true]) {
           for (const ornament of [0, 1, 2]) {
-            list.push({ register, density, timbre, bass, ornament });
+            for (const motif of [0, 1, 2, 3, 4]) {
+              list.push({ register, density, timbre, bass, ornament, motif });
+            }
           }
         }
       }

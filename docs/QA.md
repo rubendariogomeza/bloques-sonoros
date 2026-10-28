@@ -1,6 +1,6 @@
 # QA y riesgos
 
-> Última corrida: **25/10/2026** · `node --test` → **113 pruebas, 113 pasan, 0 fallos, 0 omitidas**.
+> Última corrida: **28/10/2026** · `node --test` → **129 pruebas, 129 pasan, 0 fallos, 0 omitidas**.
 > Este documento distingue lo que está **probado de forma automática** de lo que **solo puede
 > validarse con el kit físico**. No se marca como verificado nada que no se haya ejecutado.
 
@@ -23,6 +23,9 @@
 - Mapeo color → sample y altura → semitono en los tres kits.
 - Altura de la parrilla: toda fila cae en la pentatónica de Do y respeta la nota natural de cada
   instrumento.
+- Retrato: piel YCbCr frente a bloques saturados y fondo azul, caja de la cara, confirmación y TTL,
+  cara más grande, firma estable y gestos (boca, sonrisa, ojos), semilla → variación, estabilidad
+  de 900 ms y armonía de las 1024 semillas.
 
 ### No cubierto por la suite (requiere navegador u hardware)
 
@@ -30,6 +33,7 @@
 - Salida de audio real (altavoces, Bluetooth, latencia percibida).
 - Ciclo de vida del service worker, instalación PWA y modo offline.
 - Lectura de un QR impreso con luz real.
+- Caras reales en el modo Retrato: tono de piel con luz cálida, gestos finos, gafas y perfil.
 - Lectores de pantalla, teclado físico y zoom del navegador.
 - Comportamiento del servidor bajo carga real o tras un corte de energía.
 
@@ -47,7 +51,7 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
   `localStorage['mt.license.v1']` y `localStorage['mt.device.v1']`.
 - La cámara solo funciona en `localhost` o HTTPS (contexto seguro).
 
-## 3. Matriz automatizada (113 pruebas)
+## 3. Matriz automatizada (129 pruebas)
 
 ### 3.1 Audio y tiempo — 28 pruebas
 
@@ -104,7 +108,7 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | códigos inexistentes o mal formados no pasan | validación de entrada | HU-01 |
 | | limita la tasa de peticiones de licencia | 30 POST/min por IP | — |
 
-### 3.3 Visión — 42 pruebas
+### 3.3 Visión — 49 pruebas
 
 | Archivo | Prueba | Qué protege | HU |
 | --- | --- | --- | --- |
@@ -150,12 +154,19 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | un cambio global de luz se compensa con el factor de luz | deriva de exposición | HU-05 |
 | | un bloque rojo sobre una mesa de madera no se confunde con el fondo | saturación en la diferencia | HU-14 |
 | | la sombra de un bloque sobre madera sigue sin ser un bloque | el nuevo término no readmite sombras | HU-13 |
+| `vision-face.test.js` | la piel se separa de los bloques saturados y del fondo azul | un cubo naranja no es una cara | HU-15 |
+| | una cara se confirma tras dos frames y publica su caja | 2 frames y caja normalizada; ojos relativos a la caja | HU-15 |
+| | la misma cara produce la misma firma y otra cara produce otra | semilla determinista por rostro | HU-15 |
+| | sin primer plano no hay cara y el TTL la apaga | un parpadeo no corta la música | HU-15 |
+| | la cara más grande gana cuando hay varias personas | solo se sigue a quien está más cerca | HU-15 |
+| | boca abierta, sonrisa y ojos cerrados mueven sus señales de gesto | los gestos superan los umbrales de la música | HU-15 |
+| | reset borra la cara y el gesto | salir del modo sin residuos | HU-15 |
 
-### 3.4 Música — 23 pruebas
+### 3.4 Música — 32 pruebas
 
 | Archivo | Prueba | Qué protege | HU |
 | --- | --- | --- | --- |
-| `music-song.test.js` | toda variación se queda dentro de la escala y del acorde | 162 variaciones × 8 compases sin disonancia | HU-12 |
+| `music-song.test.js` | toda variación se queda dentro de la escala y del acorde | 810 variaciones × 8 compases sin disonancia | HU-12/15 |
 | | la melodía base llena el compás y va ordenada | compás completo desde el inicio | HU-12 |
 | | más densidad añade notas, no las quita | la variación es monótona | HU-12 |
 | | el registro sube o baja la melodía una octava | cambio notable de altura | HU-12 |
@@ -178,6 +189,15 @@ node server/generate-tokens.mjs --count 5 --label lote-qa
 | | degreeForMidi y pentatonicMidi son coherentes en la pentatónica | ida y vuelta sin deriva | HU-14 |
 | | la fila se recorta a los límites de la parrilla | índices fuera de rango | HU-14 |
 | | la escalera funciona con cualquier número de filas | 4/8/12 filas | HU-14 |
+| `music-portrait.test.js` | la misma semilla produce siempre la misma variación | canción estable por rostro | HU-15 |
+| | las dimensiones quedan acotadas para cualquier semilla | 1024 semillas × 2 gestos sin desbordes | HU-15 |
+| | semillas distintas reparten canciones distintas | más de 400 combinaciones y los 5 contornos | HU-15 |
+| | los gestos cambian la música sin salirse de rango | boca, sonrisa, ojos e inclinación | HU-15 |
+| | toda semilla y todo gesto se quedan en la pentatónica o en el acorde | 1024 × 2 × 8 compases sin disonancia | HU-15 |
+| | el contorno 0 no desplaza la melodía base | el contorno es un adorno, no un cambio de tonalidad | HU-15 |
+| | el tracker acepta la primera cara y exige estabilidad para cambiarla | 900 ms antes de reescribir la canción | HU-15 |
+| | una firma que vuelve atrás cancela el candidato | el ruido del detector no confirma cambios | HU-15 |
+| | el HUD describe el retrato o avisa de que no hay cara | «Retrato · esperando cara» sin nadie | HU-15 |
 
 ## 4. Matriz manual en navegador
 
@@ -216,7 +236,13 @@ Estados: ✅ verificado · 🟡 parcial · ⬜ pendiente.
 | M-29 | Fila → nota | Mover un mismo bloque de arriba abajo | El timbre no cambia; la altura baja de agudo a grave sin salir de la escala | ✅ |
 | M-30 | Una nota por bloque | Poner un bloque a caballo entre dos filas | Suena una sola vez, no dos | ✅ |
 | M-31 | Mapeo de parrilla | Sonidos → cambiar «Rojo → …» y recargar | Solo aparecen instrumentos afinados; el cambio persiste | ✅ |
-| M-32 | Cambio de modo | Alternar Parrilla / Melodía / Bloques en marcha | El audio se recarga, el HUD cambia y el modo persiste al recargar | ✅ |
+| M-32 | Cambio de modo | Alternar Parrilla / Retrato / Melodía / Bloques en marcha | El audio se recarga, el HUD cambia y el modo persiste al recargar | ✅ |
+| M-33 | Consentimiento de Retrato | Ajustes → **Retrato** sin consentimiento | Aparece el aviso de privacidad con «Ahora no» y «Activar Retrato»; no se activa hasta aceptar | ✅ |
+| M-34 | Retrato en vivo | Aceptar el aviso en simulador | HUD «Rostros 1», chip «Retrato · …» y caja/ojos/boca dibujados sobre la cara | ✅ |
+| M-35 | Cambio de cara | Tocar la escena en modo Retrato | Otra piel y otro pelo; tras ~1 s cambia el chip de variación | ✅ |
+| M-36 | Silencio sin cara | Ocultar la cara (escena vacía) | El chip pasa a «Retrato · esperando cara» y no suena ninguna nota | ✅ |
+| M-37 | Gestos | Abrir la boca, sonreír y cerrar los ojos en el simulador | Cambian densidad, adorno y registro en el compás siguiente, sin desafinar | 🟡 (señales cubiertas por prueba; falta cara real) |
+| M-38 | Retirar el consentimiento | Ajustes → desmarcar el aviso con Retrato activo | Vuelve a Parrilla y el HUD cambia | ✅ |
 
 ## 5. Plan de validación con hardware
 
@@ -337,6 +363,25 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 8. **Criterio:** con la pared vacía no hay ninguna nota en 30 s; con bloques, cada pieza produce
    exactamente una nota por paso y ninguna combinación desafina.
 
+### 5.12 Retrato sonoro (HU-15)
+
+> Requiere una persona real frente a la cámara y el consentimiento del profesor. No se graba ni se
+> guarda ninguna imagen: la prueba se hace en vivo y solo se anotan los valores del HUD.
+
+1. Calibrar con la pared vacía y activar **Ajustes → Retrato** aceptando el aviso.
+2. Sin nadie en cuadro: el chip debe decir «Retrato · esperando cara» y no debe sonar nada.
+3. Entrar en cuadro: en ≤ 1 s debe aparecer la caja, el HUD «Rostros 1» y una variación propia.
+4. Salir y volver a entrar con la misma persona: la variación debe ser la misma (semilla estable).
+5. Entrar otra persona: tras ~1 s debe cambiar el chip; al volver la primera, vuelve su canción.
+6. Gestos: abrir la boca (más densidad), sonreír (adorno) y cerrar los ojos (registro más grave).
+   El cambio debe oírse **al empezar el compás**, nunca a mitad de nota.
+7. Mover la cabeza: acentos suaves de carillón; desactivar **Acentos** y comprobar que desaparecen.
+8. Luz cálida, contraluz y piel muy clara u oscura: la caja debe mantenerse; si falla, anotar el
+   caso para ajustar `isSkin` y los cortes de `face.js`.
+9. Dos personas en cuadro: solo debe seguirse la más grande (la más cerca).
+10. **Criterio:** 0 notas fuera de la pentatónica o del acorde en 2 minutos de gestos; sin cara no
+    suena nada; ninguna imagen ni firma queda almacenada (revisar `localStorage` y la pestaña Red).
+
 ## 6. Riesgos
 
 | ID | Riesgo | Prob. | Impacto | Mitigación | Dueño |
@@ -359,6 +404,10 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | R-16 | La variación cambia demasiado a menudo y distrae | Media | Medio | Histéresis de 900 ms y cambio solo en la columna 0 | Audio |
 | R-17 | Blanco sobre pared clara o negro sobre fondo oscuro no alcanza la ocupación mínima | Media | Medio | Umbral 0,12 y muestreo de color dentro de la máscara; validar con el kit y, si falla, subir sensibilidad o retirar esos bloques | CV |
 | R-18 | Un bloque ancho dispara varias notas al cruzar columnas | Media | Bajo | Es intencional (una nota por columna); si molesta, reducir columnas o usar bloques más estrechos | Audio |
+| R-19 | Cara no detectada: perfil, contraluz, gafas o mascarilla | Media | Medio | Pedir encuadre frontal, calibrar con la pared vacía, subir sensibilidad; si falla, el silencio es seguro (no hay melodía base) | CV/UX |
+| R-20 | Falso positivo de piel sobre madera o cartón poco saturado | Media | Medio | La sustracción de fondo es la defensa real: solo cuenta lo que no estaba en la calibración. Recalibrar si aparece una caja o un mural nuevo | CV |
+| R-21 | La canción cambia sola al pasar gente por detrás | Media | Bajo | Solo se sigue la cara más grande y el cambio exige 900 ms estable; usar pared despejada | CV |
+| R-22 | Lectura de gestos con poca luz (boca, sonrisa, ojos) | Media | Bajo | Los gestos solo modulan dimensiones acotadas: si no se leen, la canción sigue estable y afinada | CV |
 
 ## 7. Limitaciones conocidas
 
@@ -378,6 +427,15 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
   puede no superar `GRID_MIN_OCCUPANCY`. La saturación ayuda con colores, no con neutros.
 - Un bloque ancho ocupa varias columnas y suena una vez por columna; una torre del mismo color
   suena una sola nota (la de mayor ocupación).
+- **Retrato:** la heurística es simple a propósito. Solo se sigue **una** cara (la mayor) y no hay
+  estimación de pose ni de mirada: un perfil muy girado puede no detectarse.
+- **Retrato:** `isSkin` es un rango YCbCr amplio; madera o cartón poco saturados pueden pasar el
+  filtro si no estaban en la calibración del fondo.
+- **Retrato:** los umbrales de expresión (boca, sonrisa, ojos) están calibrados sobre escenas
+  sintéticas; falta medirlos con caras reales y luz cálida.
+- **Retrato:** la semilla se pierde al cerrar la sesión; la misma persona obtiene la misma canción
+  en la misma sesión, no entre sesiones (es efímero por diseño).
+- **Retrato:** reutiliza la paleta afinada de la melodía; el kit elegido no cambia su sonido.
 
 ## 8. Criterios de salida (release gate)
 
@@ -386,6 +444,7 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 - [ ] QR impreso canjeado y quemado en dos dispositivos (§5.5).
 - [ ] Latencia ≤ 200 ms tras compensación en el móvil objetivo (§5.3).
 - [ ] Cambio de luz gradual y brusco sin pérdida de bloques (§5.2).
+- [ ] Retrato validado con caras reales, luz cálida y varias personas (§5.12).
 - [ ] PWA instalada, offline y actualización verificadas (§5.7).
 - [ ] Recorrido de teclado y lector de pantalla sin bloqueos (§5.8).
 - [ ] Copia de seguridad y restauración del inventario probadas (§5.9).
@@ -402,4 +461,6 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | 24/10/2026 | Chrome · sondeo de vídeo del kit | ✅ | 14 fotogramas: piezas fusionadas, mesa `orange`, blob > 50 % → origen de ADR-15 |
 | 25/10/2026 | Windows 11 · Node 24.19.0 | 113/113 | Añadidas parrilla, altura pentatónica, mapeo afinado y rojo sobre madera |
 | 25/10/2026 | Chrome · simulador | ✅ | Parrilla: pared vacía en silencio, 10 colores activos (0,25–0,37 de ocupación), una nota por bloque, cambio de modo y mapeo persistentes |
-| Pendiente | Android / iPhone + kit | — | Cámara, QR impreso, luz, latencia, PWA, pared |
+| 28/10/2026 | Windows 11 · Node 24.19.0 | 129/129 | Añadidos Retrato (16 pruebas) y contorno melódico; armonía de 1024 semillas × 2 gestos × 8 compases |
+| 28/10/2026 | Chrome · simulador (escena `face`) | ✅ | Retrato: consentimiento, HUD «Rostros 1», chip «Retrato · campana · agudo · bajo», cambio de cara (semilla 565 → 1017), «Retrato · esperando cara» sin cara, 18–19 fps |
+| Pendiente | Android / iPhone + kit | — | Cámara, QR impreso, luz, latencia, PWA, pared, caras reales |

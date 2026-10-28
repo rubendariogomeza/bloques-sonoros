@@ -1,6 +1,6 @@
 # Backlog y estado
 
-> Estado verificado el 25/10/2026. `node --test` → **113 pruebas, 0 fallos**.
+> Estado verificado el 28/10/2026. `node --test` → **129 pruebas, 0 fallos**.
 > Leyenda: ✅ implementado y verificado · 🟡 implementado, pendiente de validación en hardware · ⛔ no empezado.
 
 ## Resumen
@@ -21,6 +21,7 @@
 | HU-12 Melodía reactiva a la silueta | ✅ | `vision/structure.js`, `music/variation.js`, `music/song.js`, `audio/melody.js`; 14 pruebas (silueta, variación, armonía exhaustiva, reproductor, timbres). Verificado en navegador: 34–94 notas/8–12 s, 0 notas fuera de escala. Los timbres se cargan aparte del kit: la melodía suena también con el kit de percusión por defecto. |
 | HU-13 Montaje en pared con soporte 3D | 🟡 | Encuadre apaisado y rechazo de sombras (`vision/mask.js` + `test/vision-mask.test.js`). Falta validar con la pared y la luz del aula. |
 | HU-14 Parrilla de color (modo por defecto) | ✅ | `vision/grid.js`, `music/grid.js`, kit `grid` en `audio/kits.js`; 16 pruebas de parrilla y altura + 4 de mapeo y máscara. Verificado en simulador: pared vacía en silencio, 10 colores activos, una nota por bloque y cambio de modo persistente. |
+| HU-15 Una cara, una canción (Retrato) | 🟡 | `vision/face.js`, `music/portrait.js`, `music/song.js` con contorno; 16 pruebas (piel, firma, gestos, tracker, armonía de 1024 semillas). Verificado en simulador: HUD «Rostros», consentimiento, cambio de cara y silencio sin cara. Falta validar con caras reales. |
 
 ## Detalle
 
@@ -128,8 +129,8 @@
   natural del instrumento (`gridMidi`): el bajo se queda grave y la campana aguda, siempre en Do.
 - El kit **Parrilla** (`id: 'grid'`) tiene 10 timbres afinados y su propio mapeo
   (`settings.mappings.grid`), independiente del kit elegido. Solo admite instrumentos con altura.
-- `playMode` (`grid | melody | blocks`) vive en `settings`, se cambia en **Ajustes** y el motor de
-  visión solo ejecuta los analizadores del modo activo.
+- `playMode` (`grid | portrait | melody | blocks`) vive en `settings`, se cambia en **Ajustes** y
+  el motor de visión solo ejecuta los analizadores del modo activo.
 - La máscara gana un término de saturación (`0,5·dLuma + 0,45·dChroma + 0,55·dSat`) para que el
   rojo sobre madera se separe sin dejar de rechazar sombras (`dChroma < 0,028`).
 - Verificado en simulador: 10 colores activos, `activeCount = 0` con la pared vacía, una nota por
@@ -137,29 +138,56 @@
 - **Pendiente:** validar con el kit real el contraste de blanco sobre pared clara y negro sobre
   fondo oscuro.
 
+### HU-15 · Una cara, una canción (modo Retrato)
+
+- `face.js` cruza la máscara de primer plano con un detector de piel **YCbCr** (tonos claros y
+  oscuros, sin etiquetarlos) y elige la componente conexa mayor que parece una cara por área,
+  proporción y relleno. Solo se sigue a la persona más cerca de la cámara.
+- Dentro de la caja mide rasgos **agregados**: luma y Cr de la piel, luma y cobertura del pelo,
+  proporción, línea de ojos y distancia interocular. Con seis bins construye una firma y una
+  semilla 0..1023 (FNV-1a). **La firma es efímera:** no se guarda ni se envía.
+- `music/portrait.js` reparte la semilla en registro, densidad, timbre, bajo, adorno y un contorno
+  melódico de cinco formas. La expresión modula: boca abierta → +1 densidad, sonrisa → adorno,
+  ojos cerrados → −1 registro, inclinación → otro contorno, movimiento → acentos de carillón.
+- Cambiar de cara exige 900 ms de firma estable; la primera cara entra de inmediato. La variación
+  se fija al empezar el compás (`handlePortraitStep`), nunca a mitad de nota.
+- **Sin cara no suena nada:** no hay melodía base de fondo.
+- El modo se activa en **Ajustes → Modo de juego → Retrato** y exige el aviso de privacidad
+  (`portraitConsent`); retirarlo devuelve a Parrilla. Reutiliza la paleta afinada de la melodía.
+- El simulador tiene una escena `face` con seis presets de piel/pelo/proporción: cambiar de escena
+  recalibra con la pared vacía y tocar la escena pasa a la siguiente cara.
+- Verificado en simulador: HUD «Rostros 1», chip «Retrato · campana · agudo · bajo», cambio de
+  semilla al cambiar de cara y «Retrato · esperando cara» cuando no hay nadie.
+- **Pendiente:** validar con caras reales el rango de piel (luz cálida, piel muy clara y muy
+  oscura), la calibración de los umbrales de expresión y el caso de varias personas en cuadro.
+
 ## Deuda priorizada
 
 1. **Validar cámara real** (HU-01/02/03/04/11/13/14): ángulo del soporte, reflejos, luz solar,
    sombras de manos y pared.
-2. **Contraste de neutros en la parrilla:** el blanco sobre pared blanca y el negro sobre fondo
+2. **Retrato con caras reales** (HU-15): rango YCbCr con luz cálida y piel muy clara u oscura,
+   umbrales de expresión (boca, sonrisa, ojos), varias personas en cuadro y caras de perfil.
+   Ajustar en `PORTRAIT` (`core/config.js`) y en los cortes de `face.js`/`portrait.js`.
+3. **Contraste de neutros en la parrilla:** el blanco sobre pared blanca y el negro sobre fondo
    oscuro pueden no alcanzar `GRID_MIN_OCCUPANCY`. Probar con el kit real y, si falla, subir la
    sensibilidad del color o excluir esos bloques del set.
-3. **Estructuras muy grandes:** `maxArea = 45 %` en `engine.js` puede descartar una construcción
+4. **Estructuras muy grandes:** `maxArea = 45 %` en `engine.js` puede descartar una construcción
    que llene el encuadre. La silueta musical ya no depende de los blobs, pero el HUD y los
    destellos sí; conviene subir el límite o medir la silueta aparte.
-4. **Registro grave apagado:** la marimba a `rate 0.5` suena opaca. Evaluar subir la melodía una
+5. **Registro grave apagado:** la marimba a `rate 0.5` suena opaca. Evaluar subir la melodía una
    octava o limitar `register` a medio/agudo.
-5. **Medir latencia extremo a extremo** en móviles de gama media y ajustar el valor por defecto de
+6. **Medir latencia extremo a extremo** en móviles de gama media y ajustar el valor por defecto de
    compensación (hoy 0 ms).
-6. **QR impreso**: probar `BarcodeDetector` y `jsQR` con el código del manual a distintas
+7. **QR impreso**: probar `BarcodeDetector` y `jsQR` con el código del manual a distintas
    distancias y con poca luz.
-7. **PWA instalada**: revisar el modo `standalone`, orientación y safe areas en iOS.
-8. **Accesibilidad**: recorrido completo con teclado y lector de pantalla en las hojas.
-9. **Samples personalizados** (fuera del MVP): permitir subir archivos y guardarlos en IndexedDB.
+8. **PWA instalada**: revisar el modo `standalone`, orientación y safe areas en iOS.
+9. **Accesibilidad**: recorrido completo con teclado y lector de pantalla en las hojas, incluido
+   el recuadro de consentimiento de Retrato.
+10. **Samples personalizados** (fuera del MVP): permitir subir archivos y guardarlos en IndexedDB.
 
 ## Definición de terminado (AGENTS.md)
 
-- [x] `node --test` en verde (113/113), sin skips.
+- [x] `node --test` en verde (129/129), sin skips.
 - [x] Historia verificable con `npm start` en menos de 5 minutos (simulador + licencia).
 - [x] `docs/BACKLOG.md` con el estado real.
 - [x] Sin `console.log` de depuración ni código muerto (se retiraron `bus.js`, `store.js`, `idb.js`

@@ -8,6 +8,7 @@
  */
 import { mod } from '../core/util.js';
 import { BASE_INTENT } from './variation.js';
+import { motifOffset } from './portrait.js';
 
 /** Do5: centro del registro de la melodía. */
 export const KEY_MIDI = 72;
@@ -52,7 +53,8 @@ export function renderBar(bar, intent = BASE_INTENT, { stepsPerBar = 16 } = {}) 
   const chord = chordOf(bar);
   const pattern = MELODY[mod(bar, MELODY.length)];
   const toStep = (beat) => Math.round(beat * stepScale);
-  const midiOf = (degree) => degreeToMidi(degree, shift);
+  const motif = intent.motif ?? 0;
+  const midiOf = (degree, index = 0) => degreeToMidi(degree + motifOffset(motif, index), shift);
 
   const notes = [];
   const base = [];
@@ -70,25 +72,26 @@ export function renderBar(bar, intent = BASE_INTENT, { stepsPerBar = 16 } = {}) 
     return true;
   };
 
-  for (const note of base) {
+  for (let i = 0; i < base.length; i += 1) {
+    const note = base[i];
     if (!keep(note)) continue;
     const step = toStep(note.beat);
-    notes.push({ step, midi: midiOf(note.degree), gain: GAIN.lead, voice: 'lead' });
+    notes.push({ step, midi: midiOf(note.degree, i), gain: GAIN.lead, voice: 'lead' });
 
     // Corcheas → semicorcheas: eco suave del mismo grado, sin añadir armonía nueva.
     if (intent.density === 2 && step + Math.round(stepScale / 2) < steps) {
-      notes.push({ step: step + Math.round(stepScale / 2), midi: midiOf(note.degree), gain: GAIN.echo, voice: 'lead' });
+      notes.push({ step: step + Math.round(stepScale / 2), midi: midiOf(note.degree, i), gain: GAIN.echo, voice: 'lead' });
     }
 
     // Trino: alterna el grado superior en las notas largas.
     if (ornament === 2 && note.length >= 1) {
       const trillStep = toStep(note.beat + 0.5);
-      if (trillStep < steps) notes.push({ step: trillStep, midi: midiOf(note.degree + 1), gain: GAIN.trill, voice: 'lead' });
+      if (trillStep < steps) notes.push({ step: trillStep, midi: midiOf(note.degree + 1, i), gain: GAIN.trill, voice: 'lead' });
     }
 
     // Base ancha de la estructura → tercera paralela suave sobre cada negra.
     if (intent.bass && Number.isInteger(note.beat)) {
-      notes.push({ step, midi: midiOf(note.degree + 2), gain: GAIN.harmony, voice: 'harmony' });
+      notes.push({ step, midi: midiOf(note.degree + 2, i), gain: GAIN.harmony, voice: 'harmony' });
     }
   }
 

@@ -264,12 +264,50 @@ la fila elige el grado pentatónico, con la escalera centrada en la nota natural
 
 **Consecuencia:** el niño siente que compone (quita un bloque y desaparece su nota) sin poder
 desafinar: cualquier combinación cae en la pentatónica de Do. `playMode` queda en `settings`
-(`grid | melody | blocks`), con el modo melodía y el modo bloques como alternativas.
+(`grid | portrait | melody | blocks`), con retrato, melodía y bloques como alternativas.
 La máscara tuvo que hacerse más sensible al color: el fondo de madera hacía que el rojo se
 perdiera, así que la diferencia combina luma, cromaticidad y **saturación**
 (`0,5·dLuma + 0,45·dChroma + 0,55·dSat`) y el rechazo de sombras exige `dChroma < 0,028`.
 El costo es que blanco sobre pared blanca y negro sobre fondo oscuro siguen siendo frágiles
 (deuda anotada en BACKLOG).
+
+---
+
+## ADR-20 · Retrato sonoro: una cara, una canción (heurística propia)
+
+**Contexto:** el kit se usa también en actividades de expresión (asamblea, teatro, música en
+infantil) donde no hay cubos sobre la mesa. Se pidió un cuarto modo en el que la música saliera de
+la cara de cada niño, sin instalar modelos de reconocimiento facial ni enviar imagen a ningún
+servidor, y sin romper la promesa de que nada desafina.
+
+**Decisión:** un modo **Retrato** que reutiliza el pipeline de sustracción de fondo y añade una
+heurística propia en `vision/face.js`:
+
+- La máscara de primer plano se cruza con un detector de piel en **YCbCr** (claro y oscuro, sin
+  etiquetar tonos) y se toma la **componente conexa más grande** que parece una cara (área,
+  proporción, relleno). Solo se sigue a la persona más cerca de la cámara.
+- Dentro de su caja se miden rasgos **agregados**: luma y Cr de la piel, luma y cobertura del pelo,
+  proporción de la caja, línea de ojos y distancia interocular. Nada de identidad: la firma se
+  cuantiza a seis bins y se reduce a una semilla 0..1023 con FNV-1a.
+- `music/portrait.js` convierte la semilla en las cinco dimensiones que ya existían (registro,
+  densidad, timbre, bajo, adorno) más un **contorno melódico** de cinco formas. La mezcla de bits
+  reparte las dimensiones para que dos caras no suenen casi iguales.
+- La expresión añade una capa de gesto acotada: boca abierta → +1 densidad, sonrisa → adorno,
+  ojos cerrados → −1 registro, inclinación → otro contorno, movimiento de cabeza → acentos suaves
+  (`chime`, solo en pasos pares).
+- La firma exige **900 ms estable** para cambiar de persona (la primera cara entra al instante) y
+  la variación se aplica **solo en la columna 0**, igual que en melodía.
+- **Sin cara no suena nada**: a diferencia de melodía, no hay melodía base de fondo.
+- El modo exige **consentimiento explícito** (`settings.portraitConsent`), que se pide dentro de
+  la hoja de Ajustes con un recuadro de texto claro; retirarlo devuelve a Parrilla.
+
+**Consecuencia:** cada rostro produce una canción estable y distinta, y los gestos la modulan sin
+poder desafinar (prueba exhaustiva de 1024 semillas × 2 juegos de gestos × 8 compases). El costo
+es que la heurística es **deliberadamente simple**: la madera poco saturada puede pasar el filtro
+de piel (la defensa real es la calibración del fondo), solo se sigue una cara y no hay estimación
+de pose ni de mirada. Se descartó MediaPipe Face Mesh por peso, arranque y por la regla de no
+añadir dependencias; si el aula pide más precisión, ese es el camino natural y ya está aislado
+tras `createFaceExtractor`.
 
 ---
 
@@ -281,6 +319,7 @@ El costo es que blanco sobre pared blanca y negro sobre fondo oscuro siguen sien
 | Detección por marcadores ArUco | Requiere imprimir marcadores; el kit usa bloques de color. |
 | Separar piezas del mismo color que se tocan | Costuras y watershed son frágiles con sombras, perspectiva y luz variable; la silueta da mejor música con menos CPU (ADR-15). |
 | Mapeo uno a uno bloque → nota | Con muchas piezas suena caótico y exige acertar; la variación armónica cumple mejor el objetivo (ADR-16). |
+| Reconocer o identificar personas por la cara | Es dato biométrico, exige consentimiento y custodia; el modo Retrato solo deriva una semilla efímera de rasgos agregados (ADR-20). |
 | Backend con base de datos | El MVP solo necesita un JSON con hashes; menos infraestructura. |
 | Web Worker para visión | El pipeline a 320×240 cabe en el hilo principal a 20 fps; añadir worker complica el overlay. |
 | Audio por `<audio>` | Latencia y falta de control de polifonía; Web Audio es obligatorio. |

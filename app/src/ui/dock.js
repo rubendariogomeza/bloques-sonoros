@@ -35,6 +35,8 @@ export function createDock(root, handlers) {
   const muteBtn = root.querySelector('[data-act="mute"]');
 
   let currentBpm = 96;
+  let currentMode = 'camera';
+  let currentPlayMode = 'grid';
 
   root.addEventListener('click', (event) => {
     const button = event.target.closest('[data-act]');
@@ -55,7 +57,7 @@ export function createDock(root, handlers) {
     handlers.onBpm(Number(bpmRange.value));
   });
 
-  function update({ playing, bpm, muted, calibrated, mode }) {
+  function update({ playing, bpm, muted, calibrated, mode, playMode }) {
     if (bpm != null) {
       currentBpm = Math.round(bpm);
       bpmValue.textContent = String(currentBpm);
@@ -76,7 +78,10 @@ export function createDock(root, handlers) {
       calibrateBtn.classList.toggle('btn--ghost', calibrated);
       calibrateBtn.textContent = calibrated ? 'Recalibrar fondo' : 'Calibrar';
     }
-    if (mode != null) seedBtn.hidden = mode !== 'simulator';
+    if (mode != null) currentMode = mode;
+    if (playMode != null) currentPlayMode = playMode;
+    // Los bloques virtuales solo tienen sentido en los modos de bloques.
+    seedBtn.hidden = currentMode !== 'simulator' || currentPlayMode === 'portrait';
   }
 
   function setCalibrating(value) {

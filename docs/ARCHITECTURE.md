@@ -35,6 +35,7 @@ app/src/
   vision/layers.js      bandas de color verticales (torres)
   vision/columns.js     confirmación, TTL y estado musical por columna
   vision/grid.js        parrilla columnas × filas: ocupación y color dominante
+  vision/face.js        piel YCbCr → cara más grande → firma efímera y gestos
   vision/align.js       estimación de traslación + desplazamiento del fondo
   vision/engine.js      orquesta el pipeline; sin rAF propio
   vision/camera.js      getUserMedia + ciclo de vida del stream
@@ -46,6 +47,7 @@ app/src/
 
   music/song.js         progresión, melodía pentatónica y variaciones por compás
   music/variation.js    silueta → variación (registro, densidad, timbre, bajo, adorno)
+  music/portrait.js     semilla del rostro + gestos → variación y contorno
   music/grid.js         fila de la parrilla → nota pentatónica del instrumento
 
   audio/synth.js        síntesis offline de samples (sin assets)
@@ -88,9 +90,14 @@ index.html
 
 - **Cámara:** `startSession` pide `getUserMedia` y pinta el `<video>` en el overlay.
 - **Simulador:** el mismo `createVisionEngine` consume el canvas sintético; `calibrateOnce()`
-  calibra sin depender del rAF y después se siembran los bloques demo.
+  calibra sin depender del rAF y después se siembran los bloques demo. En modo Retrato el
+  simulador cambia a la escena `face` (pared neutra + cara sintética) y recalibra con la escena
+  vacía; tocar la escena pasa a la siguiente cara.
 - **Demo:** `sessionStorage['mt.demo']` con vencimiento a 20 minutos; `features().camera` es
   `false`, así que solo habilita el simulador.
+- **Modo Retrato:** el profesor acepta el aviso de privacidad (`settings.portraitConsent`) en
+  Ajustes antes de activarlo. El motor de visión solo enciende el analizador `face` en ese modo y
+  el audio reutiliza la paleta afinada de la melodía (`MELODY_SAMPLE_IDS`).
 
 ## 4. Contratos
 
@@ -222,6 +229,38 @@ Modo **parrilla** (por defecto): el área visible se divide en `columns × GRID_
   así el bajo se queda grave y la campana aguda. `gridLadder` expone la escalera completa y
   `pentatonicMidi`/`degreeForMidi` convierten grado ↔ nota. Toda nota cae en la pentatónica de Do.
 
+### 4.11 `createFaceExtractor(width, height, opts)` + `isSkin(r, g, b)`
+
+Modo **retrato**: la cara más grande de la escena elige la canción.
+
+- `measure(binary, rgba, now)` devuelve el objeto reutilizado `face` con
+  `{ present, stale, x, y, w, h, cx, cy, area, fill, aspect, confidence, skin, hair, eyes, mouth,
+  tilt, motion, cues, signature, seed }`, todo normalizado 0..1 salvo `seed` (0..1023).
+- La máscara de piel (`isSkin`, YCbCr) se cruza con la máscara de primer plano; se etiqueta y se
+  elige la componente mayor que pasa `minArea`, `maxArea`, `minFill` y `minAspect`/`maxAspect`.
+- `eyes.line` se mide **relativo a la caja**; `mouth.open` sale del alto de la parte central de la
+  boca y `mouth.smile` de cuánto suben las comisuras respecto al centro.
+- `signature` = seis bins (`luma piel | Cr piel | pelo | proporción | línea de ojos | distancia
+  interocular`); `seed` = FNV-1a de la firma `% 1024`. **No se guarda ni se envía nada.**
+- `confirmHits = 2` para confirmar y `ttlMs = 300` para tolerar un parpadeo (`stale`).
+- `cues` (`mouth`, `smile`, `eyes`, `tilt`, `motion`) se suavizan con EMA 0,35 para que la música
+  no reaccione al ruido de un frame.
+- `reset()` borra la cara y vuelve a `present = false`.
+
+### 4.12 `intentFromPortrait(seed, cues)` + `createPortraitTracker({ holdMs })`
+
+- `intentFromPortrait` reparte la semilla con una mezcla de bits (`mix`) en `register`,
+  `density`, `timbre`, `bass`, `ornament` y `motif` (5 contornos pentatónicos), y aplica los gestos
+  dentro de límites: `mouth > 0,55` → +1 densidad, `smile > 0,82` → adorno 2, `eyes < 0,22` →
+  −1 registro, `|tilt| > 0,55` → otro contorno.
+- Devuelve `{ register, density, timbre, bass, ornament, motif, seed, signature, portrait: true }`,
+  compatible con `renderBar` y `createMelodyPlayer`.
+- `createPortraitTracker` confirma un cambio de firma solo tras `holdMs` (900 ms) estable; la
+  primera cara entra de inmediato. `describePortrait(intent)` alimenta el chip del HUD y devuelve
+  «Retrato · esperando cara» cuando no hay nadie.
+- `motifOffset(motif, index)` desplaza grados pentatónicos; `song.js` lo usa en melodía, eco, trino
+  y armonía, así que todo contorno sigue dentro de la escala.
+
 ## 5. Pipeline de visión
 
 ```
@@ -231,18 +270,21 @@ video/canvas
   → mask: umbral dinámico (ruido) + histéresis (entrar/salir) + rechazo de sombras
   → morphology: apertura (quita píxeles sueltos) + cierre (rellena huecos)
   → grid: ocupación por cuadro + color dominante (modo parrilla)
+  → face: piel ∩ primer plano → cara mayor → firma + gestos (modo retrato)
   → structure: silueta completa (ocupación, altura, base, color, simetría)
   → components: BFS 8-conectado, área mínima/máxima, fill
   → layers: color por fila + agrupación en bandas verticales
   → columns: confirmación por hits + TTL + una entrada por color
   → main: según playMode
        grid    → handleGridStep → gridMidi(color, row) → playNote
+       portrait→ portraitTracker(semilla) → intent; handlePortraitStep → melodía + acentos
        melody  → intentTracker(silueta) → variación; handleStep → melodía + acentos
        blocks  → handleStep → playColor por columna
 ```
 
-El motor solo ejecuta los analizadores que el modo necesita (`trackGrid`, `trackStructure`,
-`trackBlobs`), así que la parrilla no paga el costo de etiquetar piezas.
+El motor solo ejecuta los analizadores que el modo necesita (`trackGrid`, `trackFace`,
+`trackStructure`, `trackBlobs`), así que la parrilla no paga el costo de etiquetar piezas ni el
+retrato el de medir la silueta.
 
 - **Color:** se clasifica por cromaticidad, no por brillo, para tolerar cambios de luz. La
   diferencia de la máscara combina luma, cromaticidad y saturación
@@ -308,8 +350,45 @@ frame ──► grid.measure ──► celdas activas ──► ¿columna del ba
   instrumentos con altura definida: un color no puede convertirse en bombo.
 - Un bloque que ocupa varias columnas suena una vez por columna; una torre del mismo color suena
   como una sola nota (la celda con más ocupación) para no duplicar el mismo instrumento.
-- Modos alternativos: **melodía** (HU-12, variación por silueta) y **bloques** (HU-08/09,
-  `playColor` por columna). `playMode` vive en `settings` y se cambia desde **Ajustes**.
+- Modos alternativos: **retrato** (HU-15, una cara → una canción), **melodía** (HU-12, variación
+  por silueta) y **bloques** (HU-08/09, `playColor` por columna). `playMode` vive en `settings` y
+  se cambia desde **Ajustes**.
+
+### 5.3 De la cara a la música
+
+```
+frame ──► face.measure ──► piel ∩ primer plano ──► cara mayor
+                              │
+                   firma (6 bins) ──► semilla 0..1023
+                              │
+                    portraitTracker (900 ms estable)
+                              │
+                     gestos (boca, sonrisa, ojos, inclinación)
+                              │
+              compás nuevo (columna 0) ──► intentFromPortrait
+                              │
+                 melodía pentatónica + acentos de movimiento
+```
+
+| Rasgo del rostro | Dimensión | Efecto audible |
+| --- | --- | --- |
+| luma y Cr de la piel | semilla | registro, densidad, timbre, bajo y adorno propios |
+| luma y cobertura del pelo | semilla | otra canción para otra persona |
+| proporción de la caja | semilla | otra canción para otra persona |
+| línea de ojos y distancia interocular | semilla | otra canción para otra persona |
+| boca abierta (`cues.mouth > 0,55`) | densidad +1 | más notas por compás |
+| sonrisa (`cues.smile`) | adorno | arpegio de cierre o trino |
+| ojos cerrados (`cues.eyes < 0,22`) | registro −1 | una octava abajo |
+| inclinación de la cabeza | contorno | otra forma melódica |
+| movimiento (`cues.motion > 0,35`) | acentos | carillón suave en pasos pares |
+
+- **Sin cara no hay música:** `handlePortraitStep` vuelve sin agendar nada si `face.present` es
+  `false`. No se cae a la melodía base.
+- La variación se congela al empezar el compás (`live.portraitIntent`); el gesto se sigue leyendo
+  en cada frame, pero solo entra en el siguiente compás.
+- La semilla es **efímera**: se pierde al cerrar la sesión y no se persiste en `localStorage`.
+- El modo reutiliza `createMelodyPlayer` y `MELODY_SAMPLE_IDS`; el kit elegido no cambia el sonido
+  de Retrato.
 
 
 ## 6. Invariantes y dónde se garantizan
@@ -326,13 +405,18 @@ frame ──► grid.measure ──► celdas activas ──► ¿columna del ba
 | Polifonía por columna | `columnModel.active()` agrupa por columna y `handleStep` recorre todas las entradas. |
 | La pared vacía no suena | `grid.measure` exige `occupancy ≥ 0,12` sobre la máscara calibrada; sin ocupación no hay celda activa. |
 | La parrilla nunca desafina | `gridMidi` recorre grados de la pentatónica de Do centrados en la nota del instrumento. |
+| Sin cara no suena nada (HU-15) | `handlePortraitStep` retorna antes de agendar si `face.present` es `false`. |
+| La cara no se guarda ni se envía | La firma vive en el objeto `face` de la sesión: no se persiste en `localStorage` ni sale en ninguna petición. |
+| El retrato nunca desafina | `intentFromPortrait` solo mueve dimensiones acotadas y `renderBar` filtra a pentatónica + acorde (1024 semillas × 2 gestos × 8 compases). |
+| El gesto no corta el pulso | La instantánea se toma en `column === 0`; el gesto se lee en cada frame pero solo se aplica al empezar el compás. |
 
 ## 7. Rendimiento y memoria
 
 - Visión a **20 fps** sobre 320×240 (~76 800 píxeles); el frame se recorta antes de procesar.
 - Buffers de fondo, máscara, morfología, parrilla, etiquetado y capas se crean una vez por sesión.
-- El motor solo ejecuta los analizadores del modo activo (`trackGrid`, `trackStructure`,
-  `trackBlobs`); la parrilla recorre la máscara una vez y reutiliza celdas e histogramas.
+- El motor solo ejecuta los analizadores del modo activo (`trackGrid`, `trackFace`,
+  `trackStructure`, `trackBlobs`); la parrilla recorre la máscara una vez y reutiliza celdas e
+  histogramas, y el retrato reutiliza la máscara de piel y el etiquetador.
 - Un único `requestAnimationFrame` para visión + overlay; sin `setInterval` de render.
 - El scheduler usa `setTimeout` de 25 ms solo como despertador.
 - `dispose()`/`stop()` en cámara, motor de visión, overlay, audio y scheduler al cambiar de vista.
@@ -341,6 +425,9 @@ frame ──► grid.measure ──► celdas activas ──► ¿columna del ba
 ## 8. Privacidad y seguridad
 
 - El video nunca se sube; el QR se decodifica en el cliente.
+- El modo Retrato no guarda ni envía caras: la firma es una semilla efímera en memoria y el
+  consentimiento (`portraitConsent`) se pide antes de activarlo. Los tonos de piel se usan como
+  señal numérica, nunca como categoría visible.
 - El servidor no guarda tokens en claro ni datos personales; solo hashes, etiqueta de lote,
   fechas y `deviceId`.
 - El desbloqueo local es copiable por diseño (offline). La defensa real es el canje único y la
@@ -359,6 +446,12 @@ frame ──► grid.measure ──► celdas activas ──► ¿columna del ba
   cubiertos tras añadir el término de saturación a la máscara.
 - **Cámara real:** el camino `getUserMedia` no se validó en hardware dentro de este entorno; la
   lógica de visión sí está cubierta por pruebas sintéticas. Ver [QA.md](QA.md).
+- **Retrato:** la heurística es simple a propósito. `isSkin` puede aceptar madera o cartón poco
+  saturados (la defensa real es la calibración del fondo), solo se sigue **una** cara (la mayor) y
+  no hay estimación de pose: una cara girada o muy de perfil puede no detectarse. La calibración
+  de umbrales de expresión está hecha sobre escenas sintéticas; falta medirla con caras reales.
+  Los tonos de piel no se etiquetan, pero el detector tiene un rango YCbCr que conviene revisar con
+  luz cálida y con piel muy oscura o muy clara.
 - **Registro grave:** la marimba a `rate 0.5` (una octava abajo) suena apagada. Si el profesor
   lo nota, conviene subir la melodía una octava o limitar el registro a medio/agudo.
 - **Latencia:** 20 fps + lookahead de 120 ms; el disparo puede adelantarse hasta 120 ms.

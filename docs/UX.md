@@ -104,7 +104,8 @@ El botón primario se deshabilita mientras arranca y muestra “Preparando…”
 - **HUD superior:** marca, estado, BPM, número de celdas o bloques, **variación vigente**, FPS
   opcional y fuente (`Cámara`/`Virtual`). En parrilla el contador dice «Celdas».
 - **Chip de variación:** texto corto que describe lo que está sonando ahora mismo
-  (`Melodía base`, `marimba · agudo · corcheas · bajo`). Solo aparece en el modo melodía.
+  (`Melodía base`, `marimba · agudo · corcheas · bajo`, `Retrato · campana · agudo · bajo`). Solo
+  aparece en los modos melodía y retrato; sin cara dice «Retrato · esperando cara».
 - **Dock inferior:** reproducción, tempo, calibrar, recalibrar, sonidos, ajustes y silencio.
 - **Banner contextual:** aparece bajo el HUD; en errores no se autocierra.
 - **Toasts:** confirmaciones breves (1,2–4,2 s) en la esquina inferior, `role="status"`.
@@ -121,11 +122,13 @@ Estados del chip:
 
 ### 4.5 Hoja **Sonidos** (HU-10/HU-14)
 
-- Título “Sonidos de los bloques” o “Sonidos de la parrilla” según el modo.
-- **Kit:** tres tarjetas (nombre + descripción) con `aria-pressed`. En parrilla no hay tarjetas:
-  el kit es fijo y afinado.
+- Título “Sonidos de los bloques”, “Sonidos de la parrilla” o “Sonidos de Retrato” según el modo.
+- **Kit:** tres tarjetas (nombre + descripción) con `aria-pressed`. En parrilla y retrato no hay
+  tarjetas: el kit es fijo y afinado.
 - **Color → sonido:** una fila por color con muestra, nombre y `select` de 18 samples. En parrilla
   el `select` solo ofrece los 10 instrumentos con altura definida.
+- **Retrato** no mapea colores: explica que cada rostro elige su combinación entre marimba, campana
+  y pizzicato, con registro, densidad, bajo y adorno, y que el kit de bloques no interviene.
 - Ayuda: “En los kits melódicos, la altura del bloque también elige la nota.”
 - **Restablecer kit** vuelve al mapeo por defecto.
 - Cada cambio se aplica al instante y se confirma con un toast; se persiste con debounce.
@@ -134,13 +137,14 @@ Estados del chip:
 
 | Control | Rango | Ayuda |
 | --- | --- | --- |
-| Modo de juego | Parrilla / Melodía / Bloques | “Parrilla: cada cuadro suena con el instrumento de su color; pared vacía, silencio. Melodía: la forma de la estructura cambia la canción. Bloques: cada color dispara su sonido.” |
+| Modo de juego | Parrilla / Retrato / Melodía / Bloques | “Parrilla: cada cuadro suena con el instrumento de su color; pared vacía, silencio. Retrato: la cara más grande elige una canción propia y sin cara no suena nada. Melodía: la forma de la estructura cambia la canción. Bloques: cada color dispara su sonido.” |
+| Retrato sonoro | Aviso + **Activar Retrato** | Aparece al elegir Retrato sin consentimiento: “La cámara mirará la cara más grande… no se guarda, no se envía y no identifica a nadie”. Con **Ahora no** se queda en el modo anterior. |
 | Rejilla del compás | 8 / 12 / 16 / 24 | “8 es más fácil de leer; 24 da más detalle.” |
 | Sensibilidad | 0–100 % | Subir si los bloques claros no se ven; bajar si hay sombras que suenan |
 | Compensación de cámara | 0–300 ms | Alinea lo que se ve con lo que suena |
 | Volumen | 0–100 % | — |
 | Clic de referencia | Sí/No | Pulso al inicio de cada barrido |
-| Acentos de los bloques | Sí/No | Solo en melodía: un toque suave al cruzar un bloque, siempre dentro de la escala |
+| Acentos de los bloques | Sí/No | En melodía y retrato: un toque suave al cruzar un bloque o mover la cabeza, siempre dentro de la escala |
 | Mostrar rendimiento | Sí/No | FPS y ms por frame |
 | Fuente de video | Cámara / Bloques virtuales | La cámara se deshabilita en demo |
 | Calibración | **Calibrar con la pared vacía**, **Recalibrar rápido** | La rápida no detiene la música |
@@ -152,7 +156,8 @@ Pie: “Bloques Sonoros v0.1.0 · El video nunca sale de este dispositivo.”
 
 Cuatro pasos numerados: colocar el móvil en el soporte frente a la pared, calibrar con la pared
 vacía, construir con los bloques y recalibrar si la cámara se mueve. Cierre **Entendido**. Se abre
-desde Ajustes para no añadir ruido al dock.
+desde Ajustes para no añadir ruido al dock. Un pie recuerda que en Ajustes se cambia entre
+Parrilla, Retrato, Melodía y Bloques, y que Retrato necesita el consentimiento del profesor.
 
 ### 4.8 Cómo cambia la música en modo melodía (HU-12)
 
@@ -192,11 +197,37 @@ un bloque y, al pasar la línea, suena el instrumento de su color en la nota de 
 - Cualquier combinación cae en la pentatónica de Do: no hay forma de desafinar.
 - El profesor puede reasignar color → instrumento en **Sonidos**, pero solo entre timbres afinados.
 
+### 4.10 Retrato (HU-15): una cara, una canción
+
+Cuarto modo. La app mira la **cara más grande** de la escena y toca «su» canción; los gestos la
+modulan. No hay cubos ni pared: sirve para asamblea, teatro o música en infantil.
+
+| Lo que hace el niño | Lo que se oye |
+| --- | --- |
+| Entra en cuadro | En ≤ 1 s aparece su canción: registro, densidad, timbre, bajo y contorno propios |
+| Abre la boca | Más notas por compás (densidad +1) |
+| Sonríe | Adorno: arpegio de cierre o trino |
+| Cierra los ojos | Una octava más grave |
+| Inclina la cabeza | Otro contorno melódico |
+| Se mueve | Acentos suaves de carillón en pasos pares |
+| Sale de cuadro | Silencio: «Retrato · esperando cara», sin melodía de fondo |
+
+- **Consentimiento explícito:** la primera vez que se elige Retrato, Ajustes muestra un recuadro
+  con **Ahora no** y **Activar Retrato**. Retirarlo devuelve a Parrilla.
+- **Privacidad en el copy:** “Todo se procesa en este dispositivo: no se guarda, no se envía y no
+  identifica a nadie. La firma se borra al cerrar la sesión.” No se nombran tonos de piel.
+- **Estable por diseño:** la canción solo cambia si la firma se mantiene **0,9 s**; el gesto se lee
+  en cada frame pero se aplica **al empezar el compás**. Nunca desafina: todo cae en la pentatónica
+  de Do o en el acorde del compás.
+- **Overlay:** caja de la cara, óvalo tenue, dos puntos de ojos y una línea de boca; sin cara,
+  «Buscando un rostro…». En simulador, tocar la escena cambia de cara para probar el cambio.
+- **HUD:** el contador dice «Rostros» (0 o 1) y el chip describe la variación vigente.
+
 ## 5. Anatomía de la escena
 
 ```
 ┌──────────────────────────────────────────────┐
-│ HUD: marca · estado · BPM · celdas · variación   │  ← chips translúcidos
+│ HUD: marca · estado · BPM · celdas/rostros · variación │  ← chips translúcidos
 │                                              │
 │   ┊        ┊        ┊        ┊        ┊      │  ← rejilla de columnas (punteada)
 │   ┊   ▢    ┊        ┊   ▢    ┊        ┊      │  ← cajas de detección por color
@@ -211,6 +242,8 @@ un bloque y, al pasar la línea, suena el instrumento de su color en la nota de 
 - La rejilla va del 14 % al 94 % de la altura para no chocar con HUD ni dock.
 - En **Parrilla** se añaden 8 filas tenues: las celdas ocupadas se tiñen con su color y las que
   van a sonar se marcan con un contorno; el HUD cuenta «Celdas».
+- En **Retrato** se dibuja la caja de la cara con un óvalo tenue, dos puntos de ojos y una línea de
+  boca; el HUD cuenta «Rostros». Sin cara se lee «Buscando un rostro…» sobre la escena.
 - La línea de barrido es ámbar (`--accent`), 2,5 px, con estela de 180 px y un punto brillante.
 - La columna que suena se ilumina con una banda cálida translúcida.
 - Cada bloque detectado se dibuja con el color real del kit y un halo suave.

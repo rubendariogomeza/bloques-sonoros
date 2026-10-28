@@ -10,6 +10,7 @@ import { createLayersExtractor, classifyShape } from './layers.js';
 import { createColumnModel } from './columns.js';
 import { createStructureExtractor } from './structure.js';
 import { createGridExtractor } from './grid.js';
+import { createFaceExtractor } from './face.js';
 import { estimateShift, shiftBackground } from './align.js';
 import { GRID_ROWS } from '../core/config.js';
 import { clamp } from '../core/util.js';
@@ -33,6 +34,7 @@ export function createVisionEngine({
   trackBlobs = true,
   trackStructure = true,
   trackGrid = true,
+  trackFace = false,
 } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -47,6 +49,7 @@ export function createVisionEngine({
   const columnModel = createColumnModel({ columns });
   const structureExtractor = createStructureExtractor(width, height, columns);
   const gridExtractor = createGridExtractor(width, height, { columns, rows });
+  const faceExtractor = createFaceExtractor(width, height);
 
   const pixels = width * height;
   const minArea = Math.max(24, Math.round(pixels * minAreaRatio));
@@ -66,6 +69,7 @@ export function createVisionEngine({
   let blobsEnabled = Boolean(trackBlobs);
   let structureEnabled = Boolean(trackStructure);
   let gridEnabled = Boolean(trackGrid);
+  let faceEnabled = Boolean(trackFace);
 
   function drawFrame() {
     const element = resolveElement(source);
@@ -109,13 +113,14 @@ export function createVisionEngine({
         maskProcessor.reset();
         columnModel.clear();
         gridExtractor.reset();
+        faceExtractor.reset();
         calibration.resolve(true);
         calibration = null;
       }
-      return { blocks: [], structure: null, grid: null, stats: stats(0, 0), calibrating: true };
+      return { blocks: [], structure: null, grid: null, face: null, stats: stats(0, 0), calibrating: true };
     }
 
-    if (!model.ready) return { blocks: [], structure: null, grid: null, stats: stats(0, 0) };
+    if (!model.ready) return { blocks: [], structure: null, grid: null, face: null, stats: stats(0, 0) };
 
     if (pendingAlign) {
       pendingAlign = false;
@@ -129,6 +134,8 @@ export function createVisionEngine({
     // La parrilla se mide sobre la máscara completa: cuadro ocupado = hay algo.
     const grid = gridEnabled ? gridExtractor.measure(maskProcessor.binary, rgba, now) : null;
     const structure = structureEnabled ? structureExtractor.measure(maskProcessor.binary, rgba) : null;
+    // Retrato: la cara más grande de la escena. Solo se mide en su modo.
+    const face = faceEnabled ? faceExtractor.measure(maskProcessor.binary, rgba, now) : null;
 
     let blobs = [];
     const detectedLayers = [];
@@ -162,6 +169,7 @@ export function createVisionEngine({
       blocks: blobsEnabled ? columnModel.blocks(now) : [],
       structure,
       grid,
+      face,
       stats: stats(blobCount, detectedLayers.length, blobs),
     };
   }
@@ -234,6 +242,7 @@ export function createVisionEngine({
     maskProcessor.reset();
     columnModel.clear();
     gridExtractor.reset();
+    faceExtractor.reset();
     return true;
   }
 
@@ -255,7 +264,7 @@ export function createVisionEngine({
   }
 
   /** Activa solo los analizadores que el modo de juego necesita. */
-  function setTrackers({ blobs, structure, grid } = {}) {
+  function setTrackers({ blobs, structure, grid, face } = {}) {
     if (blobs != null && Boolean(blobs) !== blobsEnabled) {
       blobsEnabled = Boolean(blobs);
       if (!blobsEnabled) columnModel.clear();
@@ -264,6 +273,10 @@ export function createVisionEngine({
     if (grid != null) {
       gridEnabled = Boolean(grid);
       if (!gridEnabled) gridExtractor.reset();
+    }
+    if (face != null) {
+      faceEnabled = Boolean(face);
+      if (!faceEnabled) faceExtractor.reset();
     }
   }
 
@@ -289,6 +302,7 @@ export function createVisionEngine({
     calibration = null;
     columnModel.clear();
     gridExtractor.reset();
+    faceExtractor.reset();
   }
 
   return {

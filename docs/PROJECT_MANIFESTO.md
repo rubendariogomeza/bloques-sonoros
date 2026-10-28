@@ -139,3 +139,29 @@ El acceso al software está anclado a la venta de un **kit físico** (bloques de
     1. La app funciona con encuadre apaisado y frontal sobre una pared o un tablero vertical.
     2. Las sombras del móvil y de las manos no se detectan como bloques.
     3. La calibración se hace con la pared vacía y la recalibración rápida no corta la música.
+
+### ÉPICA 6: RETRATO SONORO
+
+> Añadida el 26/10/2026 como cuarto modo de juego, junto a Parrilla, Melodía y Bloques.
+> La parrilla sigue siendo el modo por defecto.
+
+**HU-15: Una cara, una canción**
+*   *Como* niño, *Quiero* que la app mire mi cara y toque «mi» canción, y que cambie cuando sonrío
+    o abro la boca, *Para* sentir que la música sale de mí sin tener que acertar notas.
+*   **Criterios de Aceptación:**
+    1. El modo Retrato solo se activa con el consentimiento explícito del profesor y procesa la
+       imagen **en el dispositivo**: ningún frame ni firma del rostro se guarda ni se envía.
+    2. La app sigue la cara más grande de la escena y, sin cara, no suena nada (no hay melodía
+       de fondo).
+    3. Rasgos agregados del rostro (tono de piel, pelo, proporción, línea de ojos, distancia
+       interocular) eligen una canción estable y propia: registro, densidad, timbre, bajo,
+       adorno y contorno melódico.
+    4. La expresión modula la canción dentro de valores acotados: boca abierta añade densidad,
+       la sonrisa añade adorno, los ojos cerrados bajan el registro y la inclinación cambia el
+       contorno. El gesto se lee al empezar el compás, nunca a mitad de nota.
+    5. Toda nota pertenece a la pentatónica de Do o al acorde del compás: ninguna cara ni ningún
+       gesto puede desafinar.
+    6. Los tonos de piel no se etiquetan ni se muestran como categorías; solo se usan como señal
+       numérica interna y efímera.
+    7. Cambiar de persona exige 0,9 s de firma estable para no reescribir la canción con el ruido
+       del detector.
