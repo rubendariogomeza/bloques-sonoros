@@ -465,4 +465,5 @@ curl -i -X POST http://localhost:4173/api/license/redeem \
 | 28/10/2026 | Chrome · simulador (escena `face`) | ✅ | Retrato: consentimiento, HUD «Rostros 1», chip «Retrato · campana · agudo · bajo», cambio de cara (semilla 565 → 1017), «Retrato · esperando cara» sin cara, 18–19 fps |
 | 28/10/2026 | Chrome · GitHub Pages (`v7`) | ✅ | `sw.js` v7 y módulos nuevos publicados; el aviso de consentimiento aparece, **Activar Retrato** aplica el modo y persiste en `localStorage` |
 | 28/10/2026 | Chrome · GitHub Pages (`v8 → v9`) | ✅ | Actualización automática: la pestaña pasó de la caché v8 a la v9 y la navegación quedó como `reload`; el enlace muestra los cuatro modos y Retrato activo |
+| 30/10/2026 | Chrome · localhost:4173 · simulador `face` | ✅ | Captura revisada: HUD «Rostros 1», chip «Retrato · campana · medio · trino», caja/óvalo/ojos/boca sobre la cara y consentimiento persistido |
 | Pendiente | Android / iPhone + kit | — | Cámara, QR impreso, luz, latencia, PWA, pared, caras reales |
